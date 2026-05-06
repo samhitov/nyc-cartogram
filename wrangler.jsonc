@@ -7,6 +7,10 @@
     {
       "pattern": "castrio.me/nyc*",
       "zone_name": "castrio.me"
+    },
+    {
+      "pattern": "castrio.me/boston*",
+      "zone_name": "castrio.me"
     }
   ],
   "assets": {

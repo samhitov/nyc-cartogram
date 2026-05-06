@@ -1,10 +1,12 @@
-const PATH_PREFIX = "/nyc";
+const PATH_PREFIXES = ["/nyc", "/boston"];
 const DIAGNOSTIC_HEADER = "x-nyc-cartogram-worker";
 
 function withoutPrefix(pathname) {
-  if (pathname === PATH_PREFIX || pathname === `${PATH_PREFIX}/`) return "/";
-  if (pathname.startsWith(`${PATH_PREFIX}/`)) {
-    return pathname.slice(PATH_PREFIX.length);
+  for (const prefix of PATH_PREFIXES) {
+    if (pathname === prefix || pathname === `${prefix}/`) return { prefix, path: "/" };
+    if (pathname.startsWith(`${prefix}/`)) {
+      return { prefix, path: pathname.slice(prefix.length) };
+    }
   }
   return null;
 }
@@ -19,17 +21,17 @@ function withDiagnosticHeader(response) {
   });
 }
 
-function rewriteAssetRedirect(requestUrl, response) {
+function rewriteAssetRedirect(requestUrl, prefix, response) {
   const location = response.headers.get("location");
   if (!location) return response;
 
   const resolved = new URL(location, requestUrl);
   if (resolved.origin !== requestUrl.origin) return response;
   if (!resolved.pathname.startsWith("/")) return response;
-  if (resolved.pathname.startsWith(PATH_PREFIX)) return response;
+  if (PATH_PREFIXES.some((prefix) => resolved.pathname.startsWith(prefix))) return response;
 
   const headers = new Headers(response.headers);
-  headers.set("location", `${PATH_PREFIX}${resolved.pathname}${resolved.search}`);
+  headers.set("location", `${prefix}${resolved.pathname}${resolved.search}`);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -41,15 +43,16 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    const rewrittenPath = withoutPrefix(url.pathname);
+    const rewrite = withoutPrefix(url.pathname);
 
-    if (rewrittenPath === null) {
+    if (rewrite === null) {
       return withDiagnosticHeader(new Response("Not found", { status: 404 }));
     }
 
+    const rewrittenPath = rewrite.path;
     url.pathname = rewrittenPath === "/" || rewrittenPath.startsWith("/@") ? "/" : rewrittenPath;
     const assetRequest = new Request(url.toString(), request);
     const assetResponse = await env.ASSETS.fetch(assetRequest);
-    return withDiagnosticHeader(rewriteAssetRedirect(url, assetResponse));
+    return withDiagnosticHeader(rewriteAssetRedirect(url, rewrite.prefix, assetResponse));
   },
 };

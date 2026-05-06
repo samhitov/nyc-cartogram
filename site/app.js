@@ -1,4 +1,14 @@
-const DATA_URL = new URL("./data/commute_map_data.json", import.meta.url).toString();
+function detectCitySlug() {
+  const params = new URLSearchParams(window.location.search);
+  const queryCity = params.get("city");
+  if (queryCity === "boston" || queryCity === "nyc") return queryCity;
+  const firstPathSegment = window.location.pathname.split("/").filter(Boolean)[0];
+  if (firstPathSegment === "boston" || firstPathSegment === "nyc") return firstPathSegment;
+  return "nyc";
+}
+
+const CITY_SLUG = detectCitySlug();
+const DATA_URL = new URL(`./data/${CITY_SLUG}/commute_map_data.json`, import.meta.url).toString();
 const DEFAULT_TRANSIT_TIME_MINUTES = 4;
 const DEFAULT_MAX_TIME_MINUTES = 60;
 const MIN_AREA_WEIGHT = 1;
@@ -36,7 +46,7 @@ const EMOJI_BURST_PER_TICK = 3;
 const EMOJI_BURST_LIFETIME_MS = 900;
 const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 36;
 const METERS_PER_MINUTE_PER_MPH = 26.8224;
-const SETTINGS_STORAGE_KEY = "nyc-cartogram-settings-v1";
+const SETTINGS_STORAGE_KEY = `${CITY_SLUG}-cartogram-settings-v1`;
 
 const EMOJI_BURST_SETS = {
   github: ["💻", "🖥️", "⌨️", "⚙️", "🧑‍💻"],
@@ -159,6 +169,38 @@ const emojiBurstState = {
   pointerY: 0,
   intervalId: null,
 };
+
+function cityMeta() {
+  return state.data?.meta ?? {};
+}
+
+function cityDisplayName() {
+  return cityMeta().displayName || "New York City";
+}
+
+function cityShortName() {
+  return cityMeta().shortName || "NYC";
+}
+
+function citySearchQuerySuffix() {
+  return cityMeta().searchQuerySuffix || cityDisplayName();
+}
+
+function citySearchViewbox() {
+  return cityMeta().searchViewbox || "-74.30,40.95,-73.65,40.45";
+}
+
+function cityDataCredits() {
+  return cityMeta().dataCredits || "MTA GTFS, NYC Open Data, OpenStreetMap";
+}
+
+function cityDownloadPrefix() {
+  return cityMeta().downloadPrefix || `${CITY_SLUG}-commute-cartogram`;
+}
+
+function cityUrlLabel() {
+  return cityMeta().urlLabel || `castrio.me/${CITY_SLUG}`;
+}
 
 const searchUis = [
   {
@@ -754,6 +796,9 @@ function buildViewUrlFragment(
   zoomLevel = state.viewportScale,
 ) {
   const params = new URLSearchParams();
+  if (isLocalStaticDev() && CITY_SLUG !== "nyc") {
+    params.set("city", CITY_SLUG);
+  }
   if (isLocalStaticDev() && originPoint) {
     params.set("origin", formatCoordinatePair(originPoint));
   }
@@ -812,7 +857,7 @@ function getShareUrl() {
 }
 
 function getShareText() {
-  return "Explore New York City by subway commute time with this interactive transit cartogram.";
+  return cityMeta().shareText || "Explore New York City by subway commute time with this interactive transit cartogram.";
 }
 
 function escapeHtml(value) {
@@ -1957,7 +2002,7 @@ function drawMap(drawCtx, width, height) {
   if (state.originPoint) {
     const originScreen = projectPoint(state.originPoint);
     drawMarker(drawCtx, originScreen, "#d75c2e", 24, 5.5);
-    drawPinnedLabel(drawCtx, originScreen, currentOriginSummary(station?.name ?? "NYC subway"));
+    drawPinnedLabel(drawCtx, originScreen, currentOriginSummary(station?.name ?? `${cityShortName()} transit`));
   } else if (state.cursorScreen) {
     drawMarker(drawCtx, state.cursorScreen, "#d75c2e", 24, 5.5);
   }
@@ -2093,7 +2138,7 @@ function roundRectPath(drawCtx, x, y, width, height, radius) {
   drawCtx.roundRect(x, y, width, height, radius);
 }
 
-function currentOriginSummary(fallbackStationName = "NYC subway") {
+function currentOriginSummary(fallbackStationName = `${cityShortName()} transit`) {
   if (state.originLabel) return shortOriginLabel(state.originLabel);
   return `Near ${fallbackStationName}`;
 }
@@ -2125,10 +2170,10 @@ function exportShareImage() {
 
   exportCtx.fillStyle = "#17304d";
   exportCtx.font = '700 58px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
-  exportCtx.fillText("New York City", 72, 146);
+  exportCtx.fillText(cityDisplayName(), 72, 146);
 
   const nearestSeed = state.currentRender?.warp?.seeds?.[0];
-  const nearestStationName = nearestSeed ? state.data.stations[nearestSeed.index].name : "NYC subway";
+  const nearestStationName = nearestSeed ? state.data.stations[nearestSeed.index].name : `${cityShortName()} transit`;
   const normalizedOrigin = state.originPoint ? normalizeTravelPoint(state.originPoint) : null;
   const probeMeasurement = state.probePoint
     ? measureProbeFromWarp(normalizedOrigin, state.currentRender?.warp ?? null, state.probePoint)
@@ -2265,12 +2310,12 @@ function exportShareImage() {
 
   exportCtx.fillStyle = "#17304d";
   exportCtx.font = '700 24px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
-  exportCtx.fillText("castrio.me/nyc", 72, 1202);
+  exportCtx.fillText(cityUrlLabel(), 72, 1202);
 
   exportCtx.textAlign = "right";
   exportCtx.fillStyle = "#5f6f7f";
   exportCtx.font = '500 12px "Avenir Next", "Helvetica Neue", Helvetica, sans-serif';
-  exportCtx.fillText("Data: MTA GTFS, NYC Open Data, OpenStreetMap", 1008, 1202);
+  exportCtx.fillText(`Data: ${cityDataCredits()}`, 1008, 1202);
   exportCtx.textAlign = "left";
 
   return exportCanvas;
@@ -2287,7 +2332,7 @@ async function downloadShareImage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `nyc-commute-cartogram-${Date.now()}.png`;
+    link.download = `${cityDownloadPrefix()}-${Date.now()}.png`;
     link.click();
     URL.revokeObjectURL(url);
   } finally {
@@ -2705,7 +2750,7 @@ function syncMobileSheet() {
 function renderSearchResults(results) {
   clearSearchResults();
   if (!results.length) {
-    setSearchMetaText("No NYC address matches found.");
+    setSearchMetaText(`No ${cityDisplayName()} address matches found.`);
     return;
   }
   setSearchMetaText("Choose a result to pin the origin there.");
@@ -2727,7 +2772,7 @@ function renderSearchResults(results) {
         const result = results[Number(button.dataset.resultIndex)];
         const worldPoint = lonLatToWorld(result.lon, result.lat);
         if (!withinBounds(worldPoint)) {
-          setSearchMetaText("That result fell outside the current NYC map bounds.");
+          setSearchMetaText(`That result fell outside the current ${cityDisplayName()} map bounds.`);
           return;
         }
         setAddressInputs(result.title);
@@ -2748,13 +2793,13 @@ function lonLatToWorld(lon, lat) {
 
 async function searchAddress(query) {
   const params = new URLSearchParams({
-    q: `${query}, New York City`,
+    q: `${query}, ${citySearchQuerySuffix()}`,
     format: "jsonv2",
     addressdetails: "1",
     countrycodes: "us",
     limit: "5",
     bounded: "1",
-    viewbox: "-74.30,40.95,-73.65,40.45",
+    viewbox: citySearchViewbox(),
   });
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: {
@@ -2794,7 +2839,7 @@ function useCurrentLocation() {
       setLocateButtonsBusy(false);
       const worldPoint = lonLatToWorld(position.coords.longitude, position.coords.latitude);
       if (!withinBounds(worldPoint)) {
-        setSearchMetaText("That location falls outside the current NYC map bounds.");
+        setSearchMetaText(`That location falls outside the current ${cityDisplayName()} map bounds.`);
         return;
       }
       state.originLabel = "My location";
@@ -2814,9 +2859,21 @@ function useCurrentLocation() {
   );
 }
 
+function applyCityCopy() {
+  document.title = `${cityShortName()} Commute POV | Transit Time Cartogram`;
+  const heroTitle = document.querySelector(".hero-copy h1");
+  if (heroTitle) heroTitle.textContent = `${cityDisplayName()} by how long it takes to get there.`;
+  mapCanvas.setAttribute("aria-label", `Warped map of ${cityDisplayName()} by transit time`);
+  for (const ui of searchUis) {
+    ui.input.placeholder = `Search a ${cityDisplayName()} address`;
+  }
+  setSearchMetaText(`Pin the origin by typing a ${cityDisplayName()} address.`);
+}
+
 async function init() {
   const response = await fetch(DATA_URL);
   state.data = await response.json();
+  applyCityCopy();
   state.travelSettingsDefaults = getTravelSettingsDefaults();
   state.travelSettings = sanitizeTravelSettings(loadStoredTravelSettings(), state.travelSettingsDefaults);
   state.dynamicAdjacency = buildDynamicAdjacency();
@@ -3130,13 +3187,13 @@ async function init() {
       event.preventDefault();
       const query = ui.input.value.trim();
       if (!query) {
-        setSearchMetaText("Enter an NYC address to search.");
+        setSearchMetaText(`Enter a ${cityDisplayName()} address to search.`);
         clearSearchResults();
         return;
       }
 
       setSearchBusy(true);
-      setSearchMetaText("Looking up NYC address matches…");
+      setSearchMetaText(`Looking up ${cityDisplayName()} address matches…`);
       clearSearchResults();
 
       try {
@@ -3144,7 +3201,7 @@ async function init() {
         renderSearchResults(results);
       } catch (error) {
         console.error(error);
-        setSearchMetaText("Address lookup failed. Try a more specific NYC address.");
+        setSearchMetaText(`Address lookup failed. Try a more specific ${cityDisplayName()} address.`);
       } finally {
         setSearchBusy(false);
       }

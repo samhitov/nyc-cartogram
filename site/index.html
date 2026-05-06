@@ -116,9 +116,11 @@
     <script>
       (function () {
         const path = window.location.pathname;
-        const isSubpathDeploy = path === "/nyc" || path.startsWith("/nyc/");
+        const deploySlug = path === "/boston" || path.startsWith("/boston/") ? "boston" : "nyc";
+        const isSubpathDeploy =
+          path === "/nyc" || path.startsWith("/nyc/") || path === "/boston" || path.startsWith("/boston/");
         const assetBase = isSubpathDeploy
-          ? "/nyc/"
+          ? `/${deploySlug}/`
           : path.endsWith("/")
             ? path
             : path.slice(0, path.lastIndexOf("/") + 1);
