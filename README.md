@@ -26,6 +26,10 @@ The interactive app includes the Staten Island Ferry connection, but it does not
 
 Both Python scripts use the standard library only, so there is no Python dependency install step.
 
+## Testing
+
+See [TESTING.md](/Users/samhitov/dev/codex/nyc-cartogram/TESTING.md) for the automated checks and browser smoke test checklist.
+
 ## Generate The Static SVG
 
 Run:
