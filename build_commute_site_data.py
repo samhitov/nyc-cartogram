@@ -6,7 +6,11 @@ from __future__ import annotations
 import csv
 import json
 import math
+import argparse
 import statistics
+import urllib.parse
+import urllib.request
+import urllib.error
 import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -18,11 +22,47 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 SITE_DATA_PATH = ROOT / "site" / "data" / "commute_map_data.json"
 
-BOROUGHS_PATH = DATA_DIR / "borough_boundaries.geojson"
-PARKS_PATH = DATA_DIR / "parks_open_space.geojson"
-STREETS_PATH = DATA_DIR / "osm_major_streets.json"
-GTFS_PATH = DATA_DIR / "mta_gtfs_subway.zip"
-COUNTIES_KML_ZIP_PATH = DATA_DIR / "cb_2024_us_county_500k.zip"
+NYC_BOROUGHS_PATH = DATA_DIR / "borough_boundaries.geojson"
+NYC_PARKS_PATH = DATA_DIR / "parks_open_space.geojson"
+NYC_STREETS_PATH = DATA_DIR / "osm_major_streets.json"
+NYC_GTFS_PATH = DATA_DIR / "mta_gtfs_subway.zip"
+NYC_COUNTIES_KML_ZIP_PATH = DATA_DIR / "cb_2024_us_county_500k.zip"
+BOSTON_AREAS_PATH = DATA_DIR / "boston_municipalities.geojson"
+BOSTON_OPEN_SPACE_PATH = DATA_DIR / "boston_open_space.geojson"
+BOSTON_STREETS_PATH = DATA_DIR / "boston_osm_major_streets.json"
+BOSTON_GTFS_PATH = DATA_DIR / "mbta_gtfs.zip"
+
+BOSTON_MUNICIPALITIES = (
+    "Boston",
+    "Brookline",
+    "Newton",
+    "Cambridge",
+    "Somerville",
+    "Quincy",
+    "Milton",
+    "Revere",
+    "Medford",
+    "Malden",
+    "Braintree",
+)
+BOSTON_RAPID_TRANSIT_ROUTES = {
+    "Red",
+    "Orange",
+    "Blue",
+    "Green-B",
+    "Green-C",
+    "Green-D",
+    "Green-E",
+    "Mattapan",
+}
+BOSTON_MBTA_GTFS_URL = "https://cdn.mbta.com/MBTA_GTFS.zip"
+BOSTON_MUNICIPALITIES_URL = (
+    "https://arcgisserver.digital.mass.gov/arcgisserver/rest/services/DPH/Political_Boundaries/MapServer/1/query"
+)
+BOSTON_OPEN_SPACE_URL = (
+    "https://gis.eea.mass.gov/server/rest/services/Protected_and_Recreational_OpenSpace_Polygons/FeatureServer/0/query"
+)
+BOSTON_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 GRID_COLS = 160
 GRID_ROWS = 160
@@ -51,6 +91,62 @@ Polygon = List[Ring]
 MultiPolygon = List[Polygon]
 
 
+CITY_CONFIGS = {
+    "nyc": {
+        "slug": "nyc",
+        "display_name": "New York City",
+        "short_name": "NYC",
+        "area_kind": "boroughs",
+        "areas_path": NYC_BOROUGHS_PATH,
+        "area_name_property": "boroname",
+        "parks_path": NYC_PARKS_PATH,
+        "park_area_property": "shape_area",
+        "park_area_min": 70_000.0,
+        "streets_path": NYC_STREETS_PATH,
+        "gtfs_path": NYC_GTFS_PATH,
+        "output_path": SITE_DATA_PATH,
+        "city_output_path": ROOT / "site" / "data" / "nyc" / "commute_map_data.json",
+        "route_filter": {"route_types": {"1"}, "route_ids": {"SI"}},
+        "station_source": "nyc_station_json",
+        "external_land": "nyc_counties",
+        "counties_kml_path": NYC_COUNTIES_KML_ZIP_PATH,
+        "manual_connection": "staten_island_ferry",
+        "search_query_suffix": "New York City",
+        "search_viewbox": "-74.30,40.95,-73.65,40.45",
+        "share_text": "Explore New York City by subway commute time with this interactive transit cartogram.",
+        "data_credits": "MTA GTFS, NYC Open Data, OpenStreetMap",
+        "download_prefix": "nyc-commute-cartogram",
+        "url_label": "castrio.me/nyc",
+    },
+    "boston": {
+        "slug": "boston",
+        "display_name": "Boston",
+        "short_name": "Boston",
+        "area_kind": "municipalities",
+        "areas_path": BOSTON_AREAS_PATH,
+        "area_name_property": "TOWNNAME",
+        "area_include_names": set(BOSTON_MUNICIPALITIES),
+        "parks_path": BOSTON_OPEN_SPACE_PATH,
+        "park_area_property": "GIS_ACRES",
+        "park_area_min": 1.6,
+        "streets_path": BOSTON_STREETS_PATH,
+        "gtfs_path": BOSTON_GTFS_PATH,
+        "output_path": ROOT / "site" / "data" / "boston" / "commute_map_data.json",
+        "city_output_path": ROOT / "site" / "data" / "boston" / "commute_map_data.json",
+        "route_filter": {"route_ids": BOSTON_RAPID_TRANSIT_ROUTES},
+        "station_source": "gtfs_parent_stations",
+        "external_land": None,
+        "manual_connection": None,
+        "search_query_suffix": "Massachusetts",
+        "search_viewbox": "-71.30,42.45,-70.85,42.15",
+        "share_text": "Explore Boston by MBTA rapid-transit commute time with this interactive transit cartogram.",
+        "data_credits": "MBTA/MassDOT GTFS, MassGIS, OpenStreetMap",
+        "download_prefix": "boston-commute-cartogram",
+        "url_label": "castrio.me/boston",
+    },
+}
+
+
 def round_point(point: Point) -> List[float]:
     return [round(point[0], 1), round(point[1], 1)]
 
@@ -63,20 +159,136 @@ def load_json(path: Path) -> dict | list:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def download_file(url: str, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with urllib.request.urlopen(url) as response:
+        path.write_bytes(response.read())
+
+
+def fetch_json(url: str, params: dict) -> dict:
+    query = urllib.parse.urlencode(params)
+    with urllib.request.urlopen(f"{url}?{query}") as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def query_arcgis_geojson(url: str, params: dict, page_size: int = 2000) -> dict:
+    features = []
+    offset = 0
+    while True:
+        payload = fetch_json(
+            url,
+            {
+                **params,
+                "f": "geojson",
+                "resultOffset": offset,
+                "resultRecordCount": page_size,
+            },
+        )
+        batch = payload.get("features", [])
+        features.extend(batch)
+        if len(batch) < page_size and not payload.get("properties", {}).get("exceededTransferLimit"):
+            break
+        offset += page_size
+    return {"type": "FeatureCollection", "features": features}
+
+
+def write_json(path: Path, payload: dict | list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def ensure_boston_source_data(config: dict) -> None:
+    if not config["gtfs_path"].exists():
+        download_file(BOSTON_MBTA_GTFS_URL, config["gtfs_path"])
+
+    if not config["areas_path"].exists():
+        names = "', '".join(sorted(config["area_include_names"]))
+        payload = query_arcgis_geojson(
+            BOSTON_MUNICIPALITIES_URL,
+            {
+                "where": f"TOWNNAME IN ('{names}')",
+                "outFields": "TOWNNAME,TOWNCODE",
+                "outSR": 4326,
+                "returnGeometry": "true",
+            },
+        )
+        write_json(config["areas_path"], payload)
+
+
+def ensure_boston_context_data(config: dict, bbox_lonlat: Tuple[float, float, float, float]) -> None:
+    min_lon, min_lat, max_lon, max_lat = bbox_lonlat
+    if not config["parks_path"].exists():
+        payload = query_arcgis_geojson(
+            BOSTON_OPEN_SPACE_URL,
+            {
+                "where": "1=1",
+                "outFields": "SITE_NAME,GIS_ACRES,PRIM_PURP",
+                "outSR": 4326,
+                "returnGeometry": "true",
+                "geometry": json.dumps(
+                    {
+                        "xmin": min_lon,
+                        "ymin": min_lat,
+                        "xmax": max_lon,
+                        "ymax": max_lat,
+                        "spatialReference": {"wkid": 4326},
+                    }
+                ),
+                "geometryType": "esriGeometryEnvelope",
+                "spatialRel": "esriSpatialRelIntersects",
+            },
+            page_size=4000,
+        )
+        write_json(config["parks_path"], payload)
+
+    if not config["streets_path"].exists():
+        overpass_query = f"""
+        [out:json][timeout:60];
+        (
+          way["highway"~"^(motorway|trunk|primary)$"]({min_lat},{min_lon},{max_lat},{max_lon});
+        );
+        out tags geom;
+        """
+        query = urllib.parse.urlencode({"data": overpass_query}).encode("utf-8")
+        request = urllib.request.Request(
+            BOSTON_OVERPASS_URL,
+            data=query,
+            headers={"User-Agent": "nyc-cartogram-boston-data-builder/1.0"},
+        )
+        try:
+            with urllib.request.urlopen(request) as response:
+                config["streets_path"].parent.mkdir(parents=True, exist_ok=True)
+                config["streets_path"].write_bytes(response.read())
+        except urllib.error.HTTPError as error:
+            print(f"Warning: could not fetch Boston OSM streets ({error}); continuing without streets.")
+
+
 def lonlat_to_xy(lon: float, lat: float, lat0: float) -> Point:
     meters_per_deg_lat = 111_320.0
     meters_per_deg_lon = meters_per_deg_lat * math.cos(math.radians(lat0))
     return lon * meters_per_deg_lon, lat * meters_per_deg_lat
 
 
-def average_borough_latitude(payload: dict) -> float:
+def xy_to_lonlat(point: Point, lat0: float) -> Point:
+    meters_per_deg_lat = 111_320.0
+    meters_per_deg_lon = meters_per_deg_lat * math.cos(math.radians(lat0))
+    return point[0] / meters_per_deg_lon, point[1] / meters_per_deg_lat
+
+
+def iter_polygon_coordinate_sets(geometry: dict) -> Iterable[list]:
+    if not geometry:
+        return
+    if geometry["type"] == "Polygon":
+        yield geometry["coordinates"]
+    elif geometry["type"] == "MultiPolygon":
+        yield from geometry["coordinates"]
+
+
+def average_area_latitude(payload: dict) -> float:
     total = 0.0
     count = 0
     for feature in payload["features"]:
-        geometry = feature["geometry"]
-        if geometry["type"] != "MultiPolygon":
-            continue
-        for polygon in geometry["coordinates"]:
+        for polygon in iter_polygon_coordinate_sets(feature.get("geometry")):
             for ring in polygon:
                 for _, lat in ring:
                     total += lat
@@ -186,53 +398,53 @@ def point_in_multipolygon(point: Point, multipolygon: MultiPolygon) -> bool:
     return any(point_in_polygon(point, polygon) for polygon in multipolygon)
 
 
-def extract_boroughs(payload: dict, lat0: float) -> Tuple[list, MultiPolygon]:
-    boroughs = []
+def extract_areas(payload: dict, lat0: float, config: dict) -> Tuple[list, MultiPolygon]:
+    areas = []
     all_polygons: MultiPolygon = []
+    include_names = config.get("area_include_names")
+    name_property = config["area_name_property"]
     for feature in payload["features"]:
-        geometry = feature["geometry"]
-        if geometry["type"] != "MultiPolygon":
+        name = feature.get("properties", {}).get(name_property)
+        if include_names and name not in include_names:
             continue
         multipolygon: MultiPolygon = []
-        for polygon_coords in geometry["coordinates"]:
+        for polygon_coords in iter_polygon_coordinate_sets(feature.get("geometry")):
             polygon: Polygon = []
             for ring_coords in polygon_coords:
                 ring = [lonlat_to_xy(lon, lat, lat0) for lon, lat in ring_coords]
                 polygon.append(simplify_ring(ring, 120.0))
             multipolygon.append(polygon)
             all_polygons.append(polygon)
+        if not multipolygon:
+            continue
         largest_polygon = max(multipolygon, key=lambda polygon: abs(ring_area(polygon[0])))
-        boroughs.append(
+        areas.append(
             {
-                "name": feature["properties"]["boroname"],
+                "name": name,
                 "label": round_point(polygon_centroid(largest_polygon[0])),
                 "polygons": [[round_path(ring) for ring in polygon] for polygon in multipolygon],
             }
         )
-    return boroughs, all_polygons
+    return areas, all_polygons
 
 
-def extract_parks(lat0: float, bbox: Tuple[float, float, float, float]) -> list:
-    if not PARKS_PATH.exists():
+def extract_parks(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> list:
+    parks_path = config["parks_path"]
+    if not parks_path.exists():
         return []
-    payload = load_json(PARKS_PATH)
+    payload = load_json(parks_path)
     parks = []
     for feature in payload["features"]:
         try:
-            area = float(feature["properties"].get("shape_area") or 0.0)
+            area = float(feature["properties"].get(config["park_area_property"]) or 0.0)
         except (TypeError, ValueError):
             area = 0.0
-        if area < MIN_PARK_AREA:
+        if area < config["park_area_min"]:
             continue
         geometry = feature.get("geometry")
         if not geometry:
             continue
-        polygons = []
-        if geometry["type"] == "Polygon":
-            polygons = [geometry["coordinates"]]
-        elif geometry["type"] == "MultiPolygon":
-            polygons = geometry["coordinates"]
-        for polygon_coords in polygons:
+        for polygon_coords in iter_polygon_coordinate_sets(geometry):
             polygon: Polygon = []
             for ring_coords in polygon_coords:
                 ring = [lonlat_to_xy(lon, lat, lat0) for lon, lat in ring_coords]
@@ -242,10 +454,11 @@ def extract_parks(lat0: float, bbox: Tuple[float, float, float, float]) -> list:
     return parks
 
 
-def extract_streets(lat0: float, bbox: Tuple[float, float, float, float]) -> list:
-    if not STREETS_PATH.exists():
+def extract_streets(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> list:
+    streets_path = config["streets_path"]
+    if not streets_path.exists():
         return []
-    payload = load_json(STREETS_PATH)
+    payload = load_json(streets_path)
     allowed = {"motorway", "trunk", "primary"}
     streets = []
     for element in payload.get("elements", []):
@@ -288,9 +501,13 @@ def parse_kml_coordinates(text: str, lat0: float) -> Ring:
 def build_external_land_polygons(
     lat0: float,
     bbox: Tuple[float, float, float, float],
-    borough_polygons: MultiPolygon,
+    area_polygons: MultiPolygon,
+    config: dict,
 ) -> list:
-    if not COUNTIES_KML_ZIP_PATH.exists():
+    if config.get("external_land") != "nyc_counties":
+        return []
+    counties_path = config["counties_kml_path"]
+    if not counties_path.exists():
         return []
 
     include_states = {"NY", "NJ", "CT"}
@@ -298,7 +515,7 @@ def build_external_land_polygons(
     namespace = {"kml": "http://www.opengis.net/kml/2.2"}
     polygons = []
 
-    with zipfile.ZipFile(COUNTIES_KML_ZIP_PATH) as archive:
+    with zipfile.ZipFile(counties_path) as archive:
       with archive.open("cb_2024_us_county_500k.kml") as handle:
         for _, placemark in ET.iterparse(handle, events=("end",)):
             if not placemark.tag.endswith("Placemark"):
@@ -331,7 +548,7 @@ def build_external_land_polygons(
             for polygon in multipolygon:
                 if not bbox_intersects(bounds_of_ring(polygon[0]), bbox):
                     continue
-                if point_in_multipolygon(polygon_centroid(polygon[0]), borough_polygons):
+                if point_in_multipolygon(polygon_centroid(polygon[0]), area_polygons):
                     continue
                 visible_polygons.append([round_path(ring) for ring in polygon])
             if visible_polygons:
@@ -357,7 +574,18 @@ def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
-def build_station_data(lat0: float) -> Tuple[list, Dict[str, int], Dict[str, str]]:
+def route_is_included(row: dict, config: dict) -> bool:
+    route_filter = config["route_filter"]
+    route_ids = route_filter.get("route_ids")
+    route_types = route_filter.get("route_types")
+    if route_ids and row.get("route_id") in route_ids:
+        return True
+    if route_types and row.get("route_type") in route_types:
+        return True
+    return False
+
+
+def build_nyc_station_data(lat0: float, config: dict) -> Tuple[list, Dict[str, int], Dict[str, str]]:
     complex_info: Dict[str, dict] = {}
     stop_to_complex: Dict[str, str] = {}
 
@@ -385,7 +613,7 @@ def build_station_data(lat0: float) -> Tuple[list, Dict[str, int], Dict[str, str
         station_index_by_id[complex_id] = len(stations)
         stations.append(info)
 
-    for row in read_csv_from_zip(GTFS_PATH, "stops.txt"):
+    for row in read_csv_from_zip(config["gtfs_path"], "stops.txt"):
         stop_id = row["stop_id"]
         parent_station = row.get("parent_station") or ""
         if stop_id not in stop_to_complex and parent_station and parent_station in stop_to_complex:
@@ -394,20 +622,67 @@ def build_station_data(lat0: float) -> Tuple[list, Dict[str, int], Dict[str, str
     return stations, station_index_by_id, stop_to_complex
 
 
-def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float]) -> Tuple[dict, list, dict]:
+def build_gtfs_parent_station_data(config: dict, trips_by_id: dict, lat0: float) -> Tuple[list, Dict[str, int], Dict[str, str]]:
+    gtfs_path = config["gtfs_path"]
+    stops_by_id = {row["stop_id"]: row for row in read_csv_from_zip(gtfs_path, "stops.txt")}
+    used_stop_ids = set()
+    route_ids_by_parent: Dict[str, set] = defaultdict(set)
+
+    for row in read_csv_from_zip(gtfs_path, "stop_times.txt"):
+        trip = trips_by_id.get(row["trip_id"])
+        if not trip:
+            continue
+        stop_id = row["stop_id"]
+        stop = stops_by_id.get(stop_id)
+        if not stop:
+            continue
+        parent_id = stop.get("parent_station") or stop_id
+        used_stop_ids.add(stop_id)
+        route_ids_by_parent[parent_id].add(trip["route_id"])
+
+    station_rows = []
+    stop_to_complex: Dict[str, str] = {}
+    for parent_id, route_ids in route_ids_by_parent.items():
+        parent = stops_by_id.get(parent_id)
+        if not parent:
+            children = [stops_by_id[stop_id] for stop_id in used_stop_ids if stops_by_id.get(stop_id, {}).get("parent_station") == parent_id]
+            parent = children[0] if children else None
+        if not parent:
+            continue
+        stop_to_complex[parent_id] = parent_id
+        for stop_id, stop in stops_by_id.items():
+            if stop_id == parent_id or stop.get("parent_station") == parent_id:
+                stop_to_complex[stop_id] = parent_id
+        station_rows.append(
+            {
+                "id": parent_id,
+                "name": parent["stop_name"],
+                "point": lonlat_to_xy(float(parent["stop_lon"]), float(parent["stop_lat"]), lat0),
+                "routes": set(route_ids),
+                "municipality": parent.get("municipality", ""),
+            }
+        )
+
+    stations = sorted(station_rows, key=lambda station: station["name"])
+    station_index_by_id = {station["id"]: index for index, station in enumerate(stations)}
+    return stations, station_index_by_id, stop_to_complex
+
+
+def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> Tuple[dict, list, dict]:
     route_styles = {}
-    for row in read_csv_from_zip(GTFS_PATH, "routes.txt"):
-        if row.get("route_type") != "1" and row.get("route_id") != "SI":
+    gtfs_path = config["gtfs_path"]
+    for row in read_csv_from_zip(gtfs_path, "routes.txt"):
+        if not route_is_included(row, config):
             continue
         route_styles[row["route_id"]] = {
             "color": f"#{row['route_color'] or '808183'}",
             "textColor": f"#{row['route_text_color'] or 'FFFFFF'}",
-            "label": row["route_short_name"] or row["route_id"],
+            "label": row["route_short_name"] or row["route_long_name"].replace(" Line", "") or row["route_id"],
         }
 
     trips_by_id = {}
     shape_counts: Dict[Tuple[str, str], Counter[str]] = {}
-    for row in read_csv_from_zip(GTFS_PATH, "trips.txt"):
+    for row in read_csv_from_zip(gtfs_path, "trips.txt"):
         route_id = row["route_id"]
         if route_id not in route_styles:
             continue
@@ -424,7 +699,7 @@ def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float]
             selected_shape_ids[shape_id] = route_id
 
     points_by_shape = defaultdict(list)
-    for row in read_csv_from_zip(GTFS_PATH, "shapes.txt"):
+    for row in read_csv_from_zip(gtfs_path, "shapes.txt"):
         shape_id = row["shape_id"]
         if shape_id not in selected_shape_ids:
             continue
@@ -449,12 +724,12 @@ def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float]
     return route_styles, shapes, trips_by_id
 
 
-def build_route_waits(trips_by_id: dict) -> Dict[str, float]:
+def build_route_waits(trips_by_id: dict, config: dict) -> Dict[str, float]:
     departures_by_route_service: Dict[Tuple[str, str], List[int]] = defaultdict(list)
     current_trip_id = None
     first_departure = None
 
-    for row in read_csv_from_zip(GTFS_PATH, "stop_times.txt"):
+    for row in read_csv_from_zip(config["gtfs_path"], "stop_times.txt"):
         trip_id = row["trip_id"]
         stop_sequence = int(row["stop_sequence"])
         if trip_id != current_trip_id:
@@ -493,6 +768,7 @@ def build_graph(
     stop_to_complex: Dict[str, str],
     trips_by_id: dict,
     route_waits: Dict[str, float],
+    config: dict,
 ) -> Tuple[list, list, list]:
     durations_by_edge: Dict[Tuple[int, int, str], List[float]] = defaultdict(list)
     current_trip_id = None
@@ -522,7 +798,7 @@ def build_graph(
                 to_index = station_index_by_id[to_complex]
                 durations_by_edge[(from_index, to_index, route_id)].append(duration_seconds / 60.0)
 
-    for row in read_csv_from_zip(GTFS_PATH, "stop_times.txt"):
+    for row in read_csv_from_zip(config["gtfs_path"], "stop_times.txt"):
         trip_id = row["trip_id"]
         if current_trip_id is None:
             current_trip_id = trip_id
@@ -713,34 +989,67 @@ def build_grid_cells(polygons: MultiPolygon, stations: list, bbox: Tuple[float, 
     return cells, mask
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build compact data assets for the commute-time website.")
+    parser.add_argument("--city", choices=sorted(CITY_CONFIGS), default="nyc")
+    return parser.parse_args()
+
+
 def main() -> None:
-    borough_payload = load_json(BOROUGHS_PATH)
-    lat0 = average_borough_latitude(borough_payload)
-    boroughs, all_polygons = extract_boroughs(borough_payload, lat0)
+    args = parse_args()
+    config = CITY_CONFIGS[args.city]
+
+    if config["slug"] == "boston":
+        ensure_boston_source_data(config)
+
+    area_payload = load_json(config["areas_path"])
+    lat0 = average_area_latitude(area_payload)
+    areas, all_polygons = extract_areas(area_payload, lat0, config)
+    if not areas:
+        raise ValueError(f"No map areas found for {config['slug']}")
     bbox = bounds_of_multipolygon(all_polygons)
-    external_land = build_external_land_polygons(lat0, bbox, all_polygons)
-    parks = extract_parks(lat0, bbox)
-    streets = extract_streets(lat0, bbox)
-    stations, station_index_by_id, stop_to_complex = build_station_data(lat0)
-    route_styles, route_shapes, trips_by_id = build_routes_and_shapes(lat0, bbox)
-    route_waits = build_route_waits(trips_by_id)
+    if config["slug"] == "boston":
+        min_lon, min_lat = xy_to_lonlat((bbox[0], bbox[1]), lat0)
+        max_lon, max_lat = xy_to_lonlat((bbox[2], bbox[3]), lat0)
+        ensure_boston_context_data(config, (min_lon, min_lat, max_lon, max_lat))
+
+    external_land = build_external_land_polygons(lat0, bbox, all_polygons, config)
+    parks = extract_parks(lat0, bbox, config)
+    streets = extract_streets(lat0, bbox, config)
+    route_styles, route_shapes, trips_by_id = build_routes_and_shapes(lat0, bbox, config)
+    if config["station_source"] == "gtfs_parent_stations":
+        stations, station_index_by_id, stop_to_complex = build_gtfs_parent_station_data(config, trips_by_id, lat0)
+    else:
+        stations, station_index_by_id, stop_to_complex = build_nyc_station_data(lat0, config)
+    route_waits = build_route_waits(trips_by_id, config)
     route_states, station_states, adjacency = build_graph(
-        stations, station_index_by_id, stop_to_complex, trips_by_id, route_waits
+        stations, station_index_by_id, stop_to_complex, trips_by_id, route_waits, config
     )
-    add_staten_island_ferry(
-        stations,
-        station_index_by_id,
-        route_styles,
-        route_shapes,
-        route_waits,
-        route_states,
-        station_states,
-        adjacency,
-    )
+    if config.get("manual_connection") == "staten_island_ferry":
+        add_staten_island_ferry(
+            stations,
+            station_index_by_id,
+            route_styles,
+            route_shapes,
+            route_waits,
+            route_states,
+            station_states,
+            adjacency,
+        )
     cells, mask = build_grid_cells(all_polygons, stations, bbox)
 
     output = {
         "meta": {
+            "city": config["slug"],
+            "displayName": config["display_name"],
+            "shortName": config["short_name"],
+            "areaKind": config["area_kind"],
+            "searchQuerySuffix": config["search_query_suffix"],
+            "searchViewbox": config["search_viewbox"],
+            "shareText": config["share_text"],
+            "dataCredits": config["data_credits"],
+            "downloadPrefix": config["download_prefix"],
+            "urlLabel": config["url_label"],
             "lat0": round(lat0, 6),
             "bounds": [round(value, 1) for value in bbox],
             "gridCols": GRID_COLS,
@@ -754,7 +1063,8 @@ def main() -> None:
             "transferPenalty": TRANSFER_PENALTY,
             "interComplexTransferPenalty": INTER_COMPLEX_TRANSFER_PENALTY,
         },
-        "boroughs": boroughs,
+        "areas": areas,
+        "boroughs": areas,
         "externalLand": external_land,
         "parks": parks,
         "streets": streets,
@@ -777,8 +1087,14 @@ def main() -> None:
         "routeStyles": route_styles,
     }
 
-    SITE_DATA_PATH.write_text(json.dumps(output, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote {SITE_DATA_PATH}")
+    output_path = config["output_path"]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(output, separators=(",", ":")), encoding="utf-8")
+    if config["slug"] == "nyc":
+        city_output_path = config["city_output_path"]
+        city_output_path.parent.mkdir(parents=True, exist_ok=True)
+        city_output_path.write_text(json.dumps(output, separators=(",", ":")), encoding="utf-8")
+    print(f"Wrote {output_path}")
 
 
 if __name__ == "__main__":
