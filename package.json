@@ -2,6 +2,9 @@
   "name": "nyc-cartogram",
   "private": true,
   "scripts": {
+    "check": "npm run check:data && npm run check:js",
+    "check:data": "python3 scripts/check_commute_data.py",
+    "check:js": "node --check site/app.js && node --check src/worker.js",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "login": "wrangler login"
