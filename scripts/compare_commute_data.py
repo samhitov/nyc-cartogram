@@ -17,9 +17,14 @@ def canonicalize(value: Any) -> Any:
     return value
 
 
-def load(path: Path) -> Any:
+def load(path: Path) -> str:
     try:
-        return canonicalize(json.loads(path.read_text(encoding="utf-8")))
+        return json.dumps(
+            canonicalize(json.loads(path.read_text(encoding="utf-8"))),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
     except FileNotFoundError:
         print(f"missing file: {path}", file=sys.stderr)
         raise SystemExit(2)
