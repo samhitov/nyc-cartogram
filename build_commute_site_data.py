@@ -31,6 +31,10 @@ BOSTON_AREAS_PATH = DATA_DIR / "boston_municipalities.geojson"
 BOSTON_OPEN_SPACE_PATH = DATA_DIR / "boston_open_space.geojson"
 BOSTON_STREETS_PATH = DATA_DIR / "boston_osm_major_streets.json"
 BOSTON_GTFS_PATH = DATA_DIR / "mbta_gtfs.zip"
+CHICAGO_DATA_DIR = DATA_DIR / "chicago"
+CHICAGO_AREAS_PATH = CHICAGO_DATA_DIR / "municipalities.geojson"
+CHICAGO_STREETS_PATH = CHICAGO_DATA_DIR / "osm_major_streets.json"
+CHICAGO_GTFS_PATH = CHICAGO_DATA_DIR / "cta_gtfs.zip"
 
 BOSTON_MUNICIPALITIES = (
     "Boston",
@@ -63,6 +67,21 @@ BOSTON_OPEN_SPACE_URL = (
     "https://gis.eea.mass.gov/server/rest/services/Protected_and_Recreational_OpenSpace_Polygons/FeatureServer/0/query"
 )
 BOSTON_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+CHICAGO_CTA_GTFS_URL = "https://www.transitchicago.com/downloads/sch_data/google_transit.zip"
+CHICAGO_MUNICIPALITIES_URL = (
+    "https://services.arcgis.com/F7DSX1DSNSiWmOqh/arcgis/rest/services/"
+    "Cook_County_Municipalities/FeatureServer/0/query"
+)
+CHICAGO_MUNICIPALITIES = (
+    "Chicago",
+    "Cicero",
+    "Evanston",
+    "Forest Park",
+    "Oak Park",
+    "Rosemont",
+    "Skokie",
+    "Wilmette",
+)
 
 GRID_COLS = 160
 GRID_ROWS = 160
@@ -170,6 +189,46 @@ LOCATION_CONFIGS = {
             "url_label": "castrio.me/boston",
         },
     },
+    "chicago": {
+        "slug": "chicago",
+        "display_name": "Chicago",
+        "short_name": "Chicago",
+        "area_kind": "municipalities",
+        "output_path": ROOT / "site" / "data" / "chicago" / "commute_map_data.json",
+        "city_output_path": ROOT / "site" / "data" / "chicago" / "commute_map_data.json",
+        "transit": {
+            "gtfs_path": CHICAGO_GTFS_PATH,
+            "gtfs_url": CHICAGO_CTA_GTFS_URL,
+            "station_source": "gtfs_parent_stations",
+            "include_route_types": {"1"},
+            "include_route_ids": set(),
+            "exclude_route_ids": set(),
+            "service_policy": "CTA L only. Excludes CTA buses and Metra.",
+        },
+        "coverage": {
+            "areas_path": CHICAGO_AREAS_PATH,
+            "areas_url": CHICAGO_MUNICIPALITIES_URL,
+            "area_name_property": "NAME",
+            "area_include_names": set(CHICAGO_MUNICIPALITIES),
+        },
+        "context": {
+            "parks_path": None,
+            "park_area_property": None,
+            "park_area_min": 70000.0,
+            "streets_path": CHICAGO_STREETS_PATH,
+        },
+        "hooks": {
+            "manual_connection": None,
+        },
+        "ui": {
+            "search_query_suffix": "Chicago, Illinois",
+            "search_viewbox": "-87.95,42.10,-87.45,41.55",
+            "share_text": "Explore Chicago by CTA L commute time with this interactive transit cartogram.",
+            "data_credits": "CTA GTFS, Cook County open data, OpenStreetMap",
+            "download_prefix": "chicago-commute-cartogram",
+            "url_label": "castrio.me/chicago",
+        },
+    },
 }
 
 
@@ -205,9 +264,12 @@ def load_json(path: Path) -> dict | list:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def download_file(url: str, path: Path) -> None:
+def download_file(url: str, path: Path, user_agent: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(url) as response:
+    request = urllib.request.Request(url)
+    if user_agent:
+        request.add_header("User-Agent", user_agent)
+    with urllib.request.urlopen(request) as response:
         path.write_bytes(response.read())
 
 
@@ -243,6 +305,14 @@ def write_json(path: Path, payload: dict | list) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def geojson_has_features(path: Path) -> bool:
+    try:
+        payload = load_json(path)
+    except (OSError, json.JSONDecodeError):
+        return False
+    return bool(payload.get("features"))
+
+
 def ensure_static_gtfs(config: dict) -> None:
     transit = transit_config(config)
     gtfs_path = transit["gtfs_path"]
@@ -251,13 +321,13 @@ def ensure_static_gtfs(config: dict) -> None:
         return
     if not gtfs_url:
         raise FileNotFoundError(f"Missing GTFS file for {config['slug']}: {gtfs_path}")
-    download_file(gtfs_url, gtfs_path)
+    download_file(gtfs_url, gtfs_path, user_agent=f"nyc-cartogram-{config['slug']}-data-builder/1.0")
 
 
 def ensure_arcgis_coverage(config: dict) -> None:
     coverage = coverage_config(config)
     areas_path = coverage["areas_path"]
-    if areas_path.exists():
+    if areas_path.exists() and geojson_has_features(areas_path):
         return
     areas_url = coverage.get("areas_url")
     if not areas_url:
@@ -287,13 +357,37 @@ def ensure_source_data(config: dict) -> None:
     ensure_arcgis_coverage(config)
 
 
-def ensure_context_data(config: dict, bbox_lonlat: Tuple[float, float, float, float]) -> None:
-    if config["slug"] != "boston":
+def ensure_overpass_major_streets(config: dict, bbox_lonlat: Tuple[float, float, float, float]) -> None:
+    streets_path = context_config(config).get("streets_path")
+    if not streets_path or streets_path.exists():
         return
 
+    min_lon, min_lat, max_lon, max_lat = bbox_lonlat
+    overpass_query = f"""
+    [out:json][timeout:60];
+    (
+      way["highway"~"^(motorway|trunk|primary)$"]({min_lat},{min_lon},{max_lat},{max_lon});
+    );
+    out tags geom;
+    """
+    query = urllib.parse.urlencode({"data": overpass_query}).encode("utf-8")
+    request = urllib.request.Request(
+        BOSTON_OVERPASS_URL,
+        data=query,
+        headers={"User-Agent": f"nyc-cartogram-{config['slug']}-data-builder/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(request) as response:
+            streets_path.parent.mkdir(parents=True, exist_ok=True)
+            streets_path.write_bytes(response.read())
+    except urllib.error.HTTPError as error:
+        print(f"Warning: could not fetch {config['display_name']} OSM streets ({error}); continuing without streets.")
+
+
+def ensure_context_data(config: dict, bbox_lonlat: Tuple[float, float, float, float]) -> None:
     context = context_config(config)
     min_lon, min_lat, max_lon, max_lat = bbox_lonlat
-    if not context["parks_path"].exists():
+    if config["slug"] == "boston" and not context["parks_path"].exists():
         payload = query_arcgis_geojson(
             BOSTON_OPEN_SPACE_URL,
             {
@@ -317,26 +411,7 @@ def ensure_context_data(config: dict, bbox_lonlat: Tuple[float, float, float, fl
         )
         write_json(context["parks_path"], payload)
 
-    if not context["streets_path"].exists():
-        overpass_query = f"""
-        [out:json][timeout:60];
-        (
-          way["highway"~"^(motorway|trunk|primary)$"]({min_lat},{min_lon},{max_lat},{max_lon});
-        );
-        out tags geom;
-        """
-        query = urllib.parse.urlencode({"data": overpass_query}).encode("utf-8")
-        request = urllib.request.Request(
-            BOSTON_OVERPASS_URL,
-            data=query,
-            headers={"User-Agent": "nyc-cartogram-boston-data-builder/1.0"},
-        )
-        try:
-            with urllib.request.urlopen(request) as response:
-                context["streets_path"].parent.mkdir(parents=True, exist_ok=True)
-                context["streets_path"].write_bytes(response.read())
-        except urllib.error.HTTPError as error:
-            print(f"Warning: could not fetch Boston OSM streets ({error}); continuing without streets.")
+    ensure_overpass_major_streets(config, bbox_lonlat)
 
 
 def lonlat_to_xy(lon: float, lat: float, lat0: float) -> Point:
@@ -507,8 +582,8 @@ def extract_areas(payload: dict, lat0: float, config: dict) -> Tuple[list, Multi
 
 def extract_parks(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> list:
     context = context_config(config)
-    parks_path = context["parks_path"]
-    if not parks_path.exists():
+    parks_path = context.get("parks_path")
+    if not parks_path or not parks_path.exists():
         return []
     payload = load_json(parks_path)
     parks = []
@@ -533,8 +608,8 @@ def extract_parks(lat0: float, bbox: Tuple[float, float, float, float], config: 
 
 
 def extract_streets(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> list:
-    streets_path = context_config(config)["streets_path"]
-    if not streets_path.exists():
+    streets_path = context_config(config).get("streets_path")
+    if not streets_path or not streets_path.exists():
         return []
     payload = load_json(streets_path)
     allowed = {"motorway", "trunk", "primary"}
