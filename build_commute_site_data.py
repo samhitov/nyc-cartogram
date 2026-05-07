@@ -243,27 +243,54 @@ def write_json(path: Path, payload: dict | list) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def ensure_boston_source_data(config: dict) -> None:
+def ensure_static_gtfs(config: dict) -> None:
     transit = transit_config(config)
+    gtfs_path = transit["gtfs_path"]
+    gtfs_url = transit.get("gtfs_url")
+    if gtfs_path.exists():
+        return
+    if not gtfs_url:
+        raise FileNotFoundError(f"Missing GTFS file for {config['slug']}: {gtfs_path}")
+    download_file(gtfs_url, gtfs_path)
+
+
+def ensure_arcgis_coverage(config: dict) -> None:
     coverage = coverage_config(config)
-    if not transit["gtfs_path"].exists():
-        download_file(transit["gtfs_url"], transit["gtfs_path"])
+    areas_path = coverage["areas_path"]
+    if areas_path.exists():
+        return
+    areas_url = coverage.get("areas_url")
+    if not areas_url:
+        raise FileNotFoundError(f"Missing area file for {config['slug']}: {areas_path}")
 
-    if not coverage["areas_path"].exists():
-        names = "', '".join(sorted(coverage["area_include_names"]))
-        payload = query_arcgis_geojson(
-            coverage["areas_url"],
-            {
-                "where": f"TOWNNAME IN ('{names}')",
-                "outFields": "TOWNNAME,TOWNCODE",
-                "outSR": 4326,
-                "returnGeometry": "true",
-            },
-        )
-        write_json(coverage["areas_path"], payload)
+    include_names = coverage.get("area_include_names")
+    name_property = coverage["area_name_property"]
+    where = "1=1"
+    if include_names:
+        quoted = "', '".join(sorted(include_names))
+        where = f"{name_property} IN ('{quoted}')"
+
+    payload = query_arcgis_geojson(
+        areas_url,
+        {
+            "where": where,
+            "outFields": "*",
+            "outSR": 4326,
+            "returnGeometry": "true",
+        },
+    )
+    write_json(areas_path, payload)
 
 
-def ensure_boston_context_data(config: dict, bbox_lonlat: Tuple[float, float, float, float]) -> None:
+def ensure_source_data(config: dict) -> None:
+    ensure_static_gtfs(config)
+    ensure_arcgis_coverage(config)
+
+
+def ensure_context_data(config: dict, bbox_lonlat: Tuple[float, float, float, float]) -> None:
+    if config["slug"] != "boston":
+        return
+
     context = context_config(config)
     min_lon, min_lat, max_lon, max_lat = bbox_lonlat
     if not context["parks_path"].exists():
@@ -1052,8 +1079,7 @@ def main() -> None:
     args = parse_args()
     config = LOCATION_CONFIGS[args.city]
 
-    if config["slug"] == "boston":
-        ensure_boston_source_data(config)
+    ensure_source_data(config)
 
     area_payload = load_json(coverage_config(config)["areas_path"])
     lat0 = average_area_latitude(area_payload)
@@ -1061,10 +1087,9 @@ def main() -> None:
     if not areas:
         raise ValueError(f"No map areas found for {config['slug']}")
     bbox = bounds_of_multipolygon(all_polygons)
-    if config["slug"] == "boston":
-        min_lon, min_lat = xy_to_lonlat((bbox[0], bbox[1]), lat0)
-        max_lon, max_lat = xy_to_lonlat((bbox[2], bbox[3]), lat0)
-        ensure_boston_context_data(config, (min_lon, min_lat, max_lon, max_lat))
+    min_lon, min_lat = xy_to_lonlat((bbox[0], bbox[1]), lat0)
+    max_lon, max_lat = xy_to_lonlat((bbox[2], bbox[3]), lat0)
+    ensure_context_data(config, (min_lon, min_lat, max_lon, max_lat))
 
     external_land = build_external_land_polygons(lat0, bbox, all_polygons, config)
     parks = extract_parks(lat0, bbox, config)
