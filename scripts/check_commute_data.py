@@ -68,10 +68,17 @@ def check_common(city: str, data: dict) -> None:
         require(isinstance(station_index, int) and 0 <= station_index < station_count, f"{city} routeState {index} invalid stationIndex")
         require(route_id in route_style_ids, f"{city} routeState {index} unknown routeId {route_id}")
 
+    listed_state_indexes = set()
     for station_index, state_indexes in enumerate(data["stationStates"]):
         require(isinstance(state_indexes, list), f"{city} stationStates[{station_index}] is not a list")
         for state_index in state_indexes:
             require(isinstance(state_index, int) and 0 <= state_index < route_state_count, f"{city} stationStates[{station_index}] invalid route state")
+            listed_state_indexes.add(state_index)
+            require(
+                data["routeStates"][state_index]["stationIndex"] == station_index,
+                f"{city} stationStates[{station_index}] references route state for another station",
+            )
+    require(listed_state_indexes == set(range(route_state_count)), f"{city} stationStates does not list every route state")
 
     for from_state, edges in enumerate(data["adjacency"]):
         require(isinstance(edges, list), f"{city} adjacency[{from_state}] is not a list")
