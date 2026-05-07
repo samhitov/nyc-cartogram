@@ -847,9 +847,11 @@ def build_graph(
     station_index_by_id: Dict[str, int],
     stop_to_complex: Dict[str, str],
     trips_by_id: dict,
+    route_styles: dict,
     route_waits: Dict[str, float],
     config: dict,
 ) -> Tuple[list, list, list]:
+    included_route_ids = set(route_styles)
     durations_by_edge: Dict[Tuple[int, int, str], List[float]] = defaultdict(list)
     current_trip_id = None
     current_rows: List[dict] = []
@@ -859,6 +861,8 @@ def build_graph(
         if not trip or len(rows) < 2:
             return
         route_id = trip["route_id"]
+        if route_id not in included_route_ids:
+            return
         ordered = sorted(rows, key=lambda row: int(row["stop_sequence"]))
         for row in ordered:
             stop_id = row["stop_id"]
@@ -894,6 +898,7 @@ def build_graph(
     state_index_by_key: Dict[Tuple[int, str], int] = {}
     station_states: List[List[int]] = [[] for _ in stations]
     for station_index, station in enumerate(stations):
+        station["routes"].intersection_update(included_route_ids)
         for route_id in sorted(station["routes"]):
             state_index_by_key[(station_index, route_id)] = len(route_states)
             route_states.append({"stationIndex": station_index, "routeId": route_id})
@@ -1101,7 +1106,7 @@ def main() -> None:
         stations, station_index_by_id, stop_to_complex = build_nyc_station_data(lat0, config)
     route_waits = build_route_waits(trips_by_id, config)
     route_states, station_states, adjacency = build_graph(
-        stations, station_index_by_id, stop_to_complex, trips_by_id, route_waits, config
+        stations, station_index_by_id, stop_to_complex, trips_by_id, route_styles, route_waits, config
     )
     if hooks_config(config).get("manual_connection") == "staten_island_ferry":
         add_staten_island_ferry(
