@@ -91,60 +91,106 @@ Polygon = List[Ring]
 MultiPolygon = List[Polygon]
 
 
-CITY_CONFIGS = {
+LOCATION_CONFIGS = {
     "nyc": {
         "slug": "nyc",
         "display_name": "New York City",
         "short_name": "NYC",
         "area_kind": "boroughs",
-        "areas_path": NYC_BOROUGHS_PATH,
-        "area_name_property": "boroname",
-        "parks_path": NYC_PARKS_PATH,
-        "park_area_property": "shape_area",
-        "park_area_min": 70_000.0,
-        "streets_path": NYC_STREETS_PATH,
-        "gtfs_path": NYC_GTFS_PATH,
         "output_path": SITE_DATA_PATH,
         "city_output_path": ROOT / "site" / "data" / "nyc" / "commute_map_data.json",
-        "route_filter": {"route_types": {"1"}, "route_ids": {"SI"}},
-        "station_source": "nyc_station_json",
-        "external_land": "nyc_counties",
-        "counties_kml_path": NYC_COUNTIES_KML_ZIP_PATH,
-        "manual_connection": "staten_island_ferry",
-        "search_query_suffix": "New York City",
-        "search_viewbox": "-74.30,40.95,-73.65,40.45",
-        "share_text": "Explore New York City by subway commute time with this interactive transit cartogram.",
-        "data_credits": "MTA GTFS, NYC Open Data, OpenStreetMap",
-        "download_prefix": "nyc-commute-cartogram",
-        "url_label": "castrio.me/nyc",
+        "transit": {
+            "gtfs_path": NYC_GTFS_PATH,
+            "station_source": "nyc_station_json",
+            "include_route_types": {"1"},
+            "include_route_ids": {"SI"},
+            "exclude_route_ids": set(),
+        },
+        "coverage": {
+            "areas_path": NYC_BOROUGHS_PATH,
+            "area_name_property": "boroname",
+        },
+        "context": {
+            "parks_path": NYC_PARKS_PATH,
+            "park_area_property": "shape_area",
+            "park_area_min": 70_000.0,
+            "streets_path": NYC_STREETS_PATH,
+            "external_land": "nyc_counties",
+            "counties_kml_path": NYC_COUNTIES_KML_ZIP_PATH,
+        },
+        "hooks": {
+            "manual_connection": "staten_island_ferry",
+        },
+        "ui": {
+            "search_query_suffix": "New York City",
+            "search_viewbox": "-74.30,40.95,-73.65,40.45",
+            "share_text": "Explore New York City by subway commute time with this interactive transit cartogram.",
+            "data_credits": "MTA GTFS, NYC Open Data, OpenStreetMap",
+            "download_prefix": "nyc-commute-cartogram",
+            "url_label": "castrio.me/nyc",
+        },
     },
     "boston": {
         "slug": "boston",
         "display_name": "Boston",
         "short_name": "Boston",
         "area_kind": "municipalities",
-        "areas_path": BOSTON_AREAS_PATH,
-        "area_name_property": "TOWNNAME",
-        "area_include_names": set(BOSTON_MUNICIPALITIES),
-        "parks_path": BOSTON_OPEN_SPACE_PATH,
-        "park_area_property": "GIS_ACRES",
-        "park_area_min": 1.6,
-        "streets_path": BOSTON_STREETS_PATH,
-        "gtfs_path": BOSTON_GTFS_PATH,
         "output_path": ROOT / "site" / "data" / "boston" / "commute_map_data.json",
         "city_output_path": ROOT / "site" / "data" / "boston" / "commute_map_data.json",
-        "route_filter": {"route_ids": BOSTON_RAPID_TRANSIT_ROUTES},
-        "station_source": "gtfs_parent_stations",
-        "external_land": None,
-        "manual_connection": None,
-        "search_query_suffix": "Massachusetts",
-        "search_viewbox": "-71.30,42.45,-70.85,42.15",
-        "share_text": "Explore Boston by MBTA rapid-transit commute time with this interactive transit cartogram.",
-        "data_credits": "MBTA/MassDOT GTFS, MassGIS, OpenStreetMap",
-        "download_prefix": "boston-commute-cartogram",
-        "url_label": "castrio.me/boston",
+        "transit": {
+            "gtfs_path": BOSTON_GTFS_PATH,
+            "gtfs_url": BOSTON_MBTA_GTFS_URL,
+            "station_source": "gtfs_parent_stations",
+            "include_route_types": set(),
+            "include_route_ids": BOSTON_RAPID_TRANSIT_ROUTES,
+            "exclude_route_ids": set(),
+        },
+        "coverage": {
+            "areas_path": BOSTON_AREAS_PATH,
+            "areas_url": BOSTON_MUNICIPALITIES_URL,
+            "area_name_property": "TOWNNAME",
+            "area_include_names": set(BOSTON_MUNICIPALITIES),
+        },
+        "context": {
+            "parks_path": BOSTON_OPEN_SPACE_PATH,
+            "park_area_property": "GIS_ACRES",
+            "park_area_min": 1.6,
+            "streets_path": BOSTON_STREETS_PATH,
+            "external_land": None,
+        },
+        "hooks": {
+            "manual_connection": None,
+        },
+        "ui": {
+            "search_query_suffix": "Massachusetts",
+            "search_viewbox": "-71.30,42.45,-70.85,42.15",
+            "share_text": "Explore Boston by MBTA rapid-transit commute time with this interactive transit cartogram.",
+            "data_credits": "MBTA/MassDOT GTFS, MassGIS, OpenStreetMap",
+            "download_prefix": "boston-commute-cartogram",
+            "url_label": "castrio.me/boston",
+        },
     },
 }
+
+
+def transit_config(config: dict) -> dict:
+    return config["transit"]
+
+
+def coverage_config(config: dict) -> dict:
+    return config["coverage"]
+
+
+def context_config(config: dict) -> dict:
+    return config["context"]
+
+
+def hooks_config(config: dict) -> dict:
+    return config.get("hooks", {})
+
+
+def ui_config(config: dict) -> dict:
+    return config["ui"]
 
 
 def round_point(point: Point) -> List[float]:
@@ -198,13 +244,15 @@ def write_json(path: Path, payload: dict | list) -> None:
 
 
 def ensure_boston_source_data(config: dict) -> None:
-    if not config["gtfs_path"].exists():
-        download_file(BOSTON_MBTA_GTFS_URL, config["gtfs_path"])
+    transit = transit_config(config)
+    coverage = coverage_config(config)
+    if not transit["gtfs_path"].exists():
+        download_file(transit["gtfs_url"], transit["gtfs_path"])
 
-    if not config["areas_path"].exists():
-        names = "', '".join(sorted(config["area_include_names"]))
+    if not coverage["areas_path"].exists():
+        names = "', '".join(sorted(coverage["area_include_names"]))
         payload = query_arcgis_geojson(
-            BOSTON_MUNICIPALITIES_URL,
+            coverage["areas_url"],
             {
                 "where": f"TOWNNAME IN ('{names}')",
                 "outFields": "TOWNNAME,TOWNCODE",
@@ -212,12 +260,13 @@ def ensure_boston_source_data(config: dict) -> None:
                 "returnGeometry": "true",
             },
         )
-        write_json(config["areas_path"], payload)
+        write_json(coverage["areas_path"], payload)
 
 
 def ensure_boston_context_data(config: dict, bbox_lonlat: Tuple[float, float, float, float]) -> None:
+    context = context_config(config)
     min_lon, min_lat, max_lon, max_lat = bbox_lonlat
-    if not config["parks_path"].exists():
+    if not context["parks_path"].exists():
         payload = query_arcgis_geojson(
             BOSTON_OPEN_SPACE_URL,
             {
@@ -239,9 +288,9 @@ def ensure_boston_context_data(config: dict, bbox_lonlat: Tuple[float, float, fl
             },
             page_size=4000,
         )
-        write_json(config["parks_path"], payload)
+        write_json(context["parks_path"], payload)
 
-    if not config["streets_path"].exists():
+    if not context["streets_path"].exists():
         overpass_query = f"""
         [out:json][timeout:60];
         (
@@ -257,8 +306,8 @@ def ensure_boston_context_data(config: dict, bbox_lonlat: Tuple[float, float, fl
         )
         try:
             with urllib.request.urlopen(request) as response:
-                config["streets_path"].parent.mkdir(parents=True, exist_ok=True)
-                config["streets_path"].write_bytes(response.read())
+                context["streets_path"].parent.mkdir(parents=True, exist_ok=True)
+                context["streets_path"].write_bytes(response.read())
         except urllib.error.HTTPError as error:
             print(f"Warning: could not fetch Boston OSM streets ({error}); continuing without streets.")
 
@@ -401,8 +450,9 @@ def point_in_multipolygon(point: Point, multipolygon: MultiPolygon) -> bool:
 def extract_areas(payload: dict, lat0: float, config: dict) -> Tuple[list, MultiPolygon]:
     areas = []
     all_polygons: MultiPolygon = []
-    include_names = config.get("area_include_names")
-    name_property = config["area_name_property"]
+    coverage = coverage_config(config)
+    include_names = coverage.get("area_include_names")
+    name_property = coverage["area_name_property"]
     for feature in payload["features"]:
         name = feature.get("properties", {}).get(name_property)
         if include_names and name not in include_names:
@@ -429,17 +479,18 @@ def extract_areas(payload: dict, lat0: float, config: dict) -> Tuple[list, Multi
 
 
 def extract_parks(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> list:
-    parks_path = config["parks_path"]
+    context = context_config(config)
+    parks_path = context["parks_path"]
     if not parks_path.exists():
         return []
     payload = load_json(parks_path)
     parks = []
     for feature in payload["features"]:
         try:
-            area = float(feature["properties"].get(config["park_area_property"]) or 0.0)
+            area = float(feature["properties"].get(context["park_area_property"]) or 0.0)
         except (TypeError, ValueError):
             area = 0.0
-        if area < config["park_area_min"]:
+        if area < context["park_area_min"]:
             continue
         geometry = feature.get("geometry")
         if not geometry:
@@ -455,7 +506,7 @@ def extract_parks(lat0: float, bbox: Tuple[float, float, float, float], config: 
 
 
 def extract_streets(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> list:
-    streets_path = config["streets_path"]
+    streets_path = context_config(config)["streets_path"]
     if not streets_path.exists():
         return []
     payload = load_json(streets_path)
@@ -504,9 +555,10 @@ def build_external_land_polygons(
     area_polygons: MultiPolygon,
     config: dict,
 ) -> list:
-    if config.get("external_land") != "nyc_counties":
+    context = context_config(config)
+    if context.get("external_land") != "nyc_counties":
         return []
-    counties_path = config["counties_kml_path"]
+    counties_path = context["counties_kml_path"]
     if not counties_path.exists():
         return []
 
@@ -575,12 +627,13 @@ def clamp(value: float, low: float, high: float) -> float:
 
 
 def route_is_included(row: dict, config: dict) -> bool:
-    route_filter = config["route_filter"]
-    route_ids = route_filter.get("route_ids")
-    route_types = route_filter.get("route_types")
-    if route_ids and row.get("route_id") in route_ids:
+    transit = transit_config(config)
+    route_id = row.get("route_id")
+    if route_id in transit.get("exclude_route_ids", set()):
+        return False
+    if route_id in transit.get("include_route_ids", set()):
         return True
-    if route_types and row.get("route_type") in route_types:
+    if row.get("route_type") in transit.get("include_route_types", set()):
         return True
     return False
 
@@ -613,7 +666,7 @@ def build_nyc_station_data(lat0: float, config: dict) -> Tuple[list, Dict[str, i
         station_index_by_id[complex_id] = len(stations)
         stations.append(info)
 
-    for row in read_csv_from_zip(config["gtfs_path"], "stops.txt"):
+    for row in read_csv_from_zip(transit_config(config)["gtfs_path"], "stops.txt"):
         stop_id = row["stop_id"]
         parent_station = row.get("parent_station") or ""
         if stop_id not in stop_to_complex and parent_station and parent_station in stop_to_complex:
@@ -623,7 +676,7 @@ def build_nyc_station_data(lat0: float, config: dict) -> Tuple[list, Dict[str, i
 
 
 def build_gtfs_parent_station_data(config: dict, trips_by_id: dict, lat0: float) -> Tuple[list, Dict[str, int], Dict[str, str]]:
-    gtfs_path = config["gtfs_path"]
+    gtfs_path = transit_config(config)["gtfs_path"]
     stops_by_id = {row["stop_id"]: row for row in read_csv_from_zip(gtfs_path, "stops.txt")}
     used_stop_ids = set()
     route_ids_by_parent: Dict[str, set] = defaultdict(set)
@@ -670,7 +723,7 @@ def build_gtfs_parent_station_data(config: dict, trips_by_id: dict, lat0: float)
 
 def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> Tuple[dict, list, dict]:
     route_styles = {}
-    gtfs_path = config["gtfs_path"]
+    gtfs_path = transit_config(config)["gtfs_path"]
     for row in read_csv_from_zip(gtfs_path, "routes.txt"):
         if not route_is_included(row, config):
             continue
@@ -729,7 +782,7 @@ def build_route_waits(trips_by_id: dict, config: dict) -> Dict[str, float]:
     current_trip_id = None
     first_departure = None
 
-    for row in read_csv_from_zip(config["gtfs_path"], "stop_times.txt"):
+    for row in read_csv_from_zip(transit_config(config)["gtfs_path"], "stop_times.txt"):
         trip_id = row["trip_id"]
         stop_sequence = int(row["stop_sequence"])
         if trip_id != current_trip_id:
@@ -798,7 +851,7 @@ def build_graph(
                 to_index = station_index_by_id[to_complex]
                 durations_by_edge[(from_index, to_index, route_id)].append(duration_seconds / 60.0)
 
-    for row in read_csv_from_zip(config["gtfs_path"], "stop_times.txt"):
+    for row in read_csv_from_zip(transit_config(config)["gtfs_path"], "stop_times.txt"):
         trip_id = row["trip_id"]
         if current_trip_id is None:
             current_trip_id = trip_id
@@ -991,18 +1044,18 @@ def build_grid_cells(polygons: MultiPolygon, stations: list, bbox: Tuple[float, 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build compact data assets for the commute-time website.")
-    parser.add_argument("--city", choices=sorted(CITY_CONFIGS), default="nyc")
+    parser.add_argument("--city", choices=sorted(LOCATION_CONFIGS), default="nyc")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    config = CITY_CONFIGS[args.city]
+    config = LOCATION_CONFIGS[args.city]
 
     if config["slug"] == "boston":
         ensure_boston_source_data(config)
 
-    area_payload = load_json(config["areas_path"])
+    area_payload = load_json(coverage_config(config)["areas_path"])
     lat0 = average_area_latitude(area_payload)
     areas, all_polygons = extract_areas(area_payload, lat0, config)
     if not areas:
@@ -1017,7 +1070,7 @@ def main() -> None:
     parks = extract_parks(lat0, bbox, config)
     streets = extract_streets(lat0, bbox, config)
     route_styles, route_shapes, trips_by_id = build_routes_and_shapes(lat0, bbox, config)
-    if config["station_source"] == "gtfs_parent_stations":
+    if transit_config(config)["station_source"] == "gtfs_parent_stations":
         stations, station_index_by_id, stop_to_complex = build_gtfs_parent_station_data(config, trips_by_id, lat0)
     else:
         stations, station_index_by_id, stop_to_complex = build_nyc_station_data(lat0, config)
@@ -1025,7 +1078,7 @@ def main() -> None:
     route_states, station_states, adjacency = build_graph(
         stations, station_index_by_id, stop_to_complex, trips_by_id, route_waits, config
     )
-    if config.get("manual_connection") == "staten_island_ferry":
+    if hooks_config(config).get("manual_connection") == "staten_island_ferry":
         add_staten_island_ferry(
             stations,
             station_index_by_id,
@@ -1037,6 +1090,7 @@ def main() -> None:
             adjacency,
         )
     cells, mask = build_grid_cells(all_polygons, stations, bbox)
+    ui = ui_config(config)
 
     output = {
         "meta": {
@@ -1044,12 +1098,12 @@ def main() -> None:
             "displayName": config["display_name"],
             "shortName": config["short_name"],
             "areaKind": config["area_kind"],
-            "searchQuerySuffix": config["search_query_suffix"],
-            "searchViewbox": config["search_viewbox"],
-            "shareText": config["share_text"],
-            "dataCredits": config["data_credits"],
-            "downloadPrefix": config["download_prefix"],
-            "urlLabel": config["url_label"],
+            "searchQuerySuffix": ui["search_query_suffix"],
+            "searchViewbox": ui["search_viewbox"],
+            "shareText": ui["share_text"],
+            "dataCredits": ui["data_credits"],
+            "downloadPrefix": ui["download_prefix"],
+            "urlLabel": ui["url_label"],
             "lat0": round(lat0, 6),
             "bounds": [round(value, 1) for value in bbox],
             "gridCols": GRID_COLS,
