@@ -12,9 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 DATASETS = {
     "nyc": ROOT / "site" / "data" / "nyc" / "commute_map_data.json",
     "boston": ROOT / "site" / "data" / "boston" / "commute_map_data.json",
+    "chicago": ROOT / "site" / "data" / "chicago" / "commute_map_data.json",
 }
 BOSTON_RAPID_ROUTES = {"Red", "Orange", "Blue", "Green-B", "Green-C", "Green-D", "Green-E", "Mattapan"}
 SILVER_LINE_ROUTE_IDS = {"741", "742", "743", "746", "749", "751"}
+CHICAGO_L_ROUTES = {"Red", "Blue", "Brn", "G", "Org", "Pink", "P", "Y"}
 
 
 def fail(message: str) -> None:
@@ -56,11 +58,36 @@ def check_common(city: str, data: dict) -> None:
     require(len(data["routeStates"]) == len(data["adjacency"]), f"{city} routeStates/adjacency length mismatch")
     require(len(data["stations"]) == len(data["stationStates"]), f"{city} stations/stationStates length mismatch")
 
+    station_count = len(data["stations"])
+    route_state_count = len(data["routeStates"])
+    route_style_ids = set(data["routeStyles"])
+
+    for index, route_state in enumerate(data["routeStates"]):
+        station_index = route_state.get("stationIndex")
+        route_id = route_state.get("routeId")
+        require(isinstance(station_index, int) and 0 <= station_index < station_count, f"{city} routeState {index} invalid stationIndex")
+        require(route_id in route_style_ids, f"{city} routeState {index} unknown routeId {route_id}")
+
+    for station_index, state_indexes in enumerate(data["stationStates"]):
+        require(isinstance(state_indexes, list), f"{city} stationStates[{station_index}] is not a list")
+        for state_index in state_indexes:
+            require(isinstance(state_index, int) and 0 <= state_index < route_state_count, f"{city} stationStates[{station_index}] invalid route state")
+
+    for from_state, edges in enumerate(data["adjacency"]):
+        require(isinstance(edges, list), f"{city} adjacency[{from_state}] is not a list")
+        for edge in edges:
+            require(isinstance(edge, list) and len(edge) == 2, f"{city} adjacency[{from_state}] invalid edge")
+            to_state, weight = edge
+            require(isinstance(to_state, int) and 0 <= to_state < route_state_count, f"{city} adjacency[{from_state}] invalid destination")
+            require(isinstance(weight, (int, float)) and weight > 0, f"{city} adjacency[{from_state}] invalid weight")
+
     for station in data["stations"]:
         require(station.get("id"), f"{city} station missing id")
         require(station.get("name"), f"{city} station missing name")
         require(isinstance(station.get("point"), list) and len(station["point"]) == 2, f"{city} station has invalid point")
         require(isinstance(station.get("routes"), list), f"{city} station has invalid routes")
+        for route_id in station["routes"]:
+            require(route_id in route_style_ids, f"{city} station {station.get('name')} has unknown route {route_id}")
 
 
 def check_nyc(data: dict) -> None:
@@ -76,14 +103,27 @@ def check_boston(data: dict) -> None:
     require(any(station.get("name") == "Park Street" for station in data["stations"]), "boston missing Park Street station")
 
 
+def check_chicago(data: dict) -> None:
+    route_ids = set(data["routeStyles"])
+    require(CHICAGO_L_ROUTES.issubset(route_ids), "chicago missing one or more CTA L routes")
+    require(all(route_id in CHICAGO_L_ROUTES for route_id in route_ids), "chicago includes non-L route ids")
+    station_names = {station.get("name") for station in data["stations"]}
+    require("Clark/Lake" in station_names or "State/Lake" in station_names, "chicago missing expected Loop station")
+
+
 def main() -> None:
     for city, path in DATASETS.items():
+        if city == "chicago" and not path.exists():
+            print("chicago: skipped; data not generated yet")
+            continue
         data = load_dataset(city, path)
         check_common(city, data)
         if city == "nyc":
             check_nyc(data)
         elif city == "boston":
             check_boston(data)
+        elif city == "chicago":
+            check_chicago(data)
         print(f"{city}: ok")
 
 
