@@ -562,8 +562,16 @@ function pointInExternalLand(point) {
   return false;
 }
 
+function pointInLandMask(point) {
+  for (const polygon of state.data.landMask || []) {
+    if (pointInPolygon(point, polygon)) return true;
+  }
+  return false;
+}
+
 function classifySurface(point) {
   if (pointInBoroughs(point)) return "borough";
+  if (pointInLandMask(point)) return "land";
   return pointInExternalLand(point) ? "land" : "water";
 }
 
