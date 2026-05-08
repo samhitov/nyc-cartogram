@@ -116,9 +116,10 @@
     <script>
       (function () {
         const path = window.location.pathname;
-        const deploySlug = path === "/boston" || path.startsWith("/boston/") ? "boston" : "nyc";
-        const isSubpathDeploy =
-          path === "/nyc" || path.startsWith("/nyc/") || path === "/boston" || path.startsWith("/boston/");
+        const supportedSlugs = new Set(["nyc", "boston", "chicago"]);
+        const firstSegment = path.split("/").filter(Boolean)[0];
+        const deploySlug = supportedSlugs.has(firstSegment) ? firstSegment : "nyc";
+        const isSubpathDeploy = supportedSlugs.has(firstSegment);
         const assetBase = isSubpathDeploy
           ? `/${deploySlug}/`
           : path.endsWith("/")
@@ -440,7 +441,7 @@
       </main>
 
       <section class="notes">
-        <p>
+        <p id="transitNote">
           Travel times are estimated from MTA GTFS subway trips plus short walking access to and
           from stations. The map is transit-only for now and does not yet include bus service
           or real-time schedules. The only ferry service included is the Staten Island Ferry. Check out the <a href="https://github.com/AntCas/nyc-cartogram/tree/main" target="_blank" rel="noreferrer">GitHub</a> for more details.
@@ -448,7 +449,7 @@
       </section>
 
       <footer class="footer-strip">
-        <div class="footer-links">
+        <div id="sourceLinks" class="footer-links">
           <a href="https://data.cityofnewyork.us/resource/gthc-hcne.geojson?$limit=100" target="_blank" rel="noreferrer" data-emoji-burst="nyc">NYC borough boundaries</a>
           <a href="https://new.mta.info/developers" target="_blank" rel="noreferrer" data-emoji-burst="transit">MTA GTFS subway data</a>
           <a href="https://www.openstreetmap.org/" target="_blank" rel="noreferrer" data-emoji-burst="maps">OpenStreetMap streets</a>

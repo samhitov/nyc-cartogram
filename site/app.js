@@ -1,9 +1,11 @@
+const SUPPORTED_CITY_SLUGS = new Set(["nyc", "boston", "chicago"]);
+
 function detectCitySlug() {
   const params = new URLSearchParams(window.location.search);
   const queryCity = params.get("city");
-  if (queryCity === "boston" || queryCity === "nyc") return queryCity;
+  if (SUPPORTED_CITY_SLUGS.has(queryCity)) return queryCity;
   const firstPathSegment = window.location.pathname.split("/").filter(Boolean)[0];
-  if (firstPathSegment === "boston" || firstPathSegment === "nyc") return firstPathSegment;
+  if (SUPPORTED_CITY_SLUGS.has(firstPathSegment)) return firstPathSegment;
   return "nyc";
 }
 
@@ -51,6 +53,7 @@ const SETTINGS_STORAGE_KEY = `${CITY_SLUG}-cartogram-settings-v1`;
 const EMOJI_BURST_SETS = {
   github: ["💻", "🖥️", "⌨️", "⚙️", "🧑‍💻"],
   nyc: ["🗽", "🌆", "🏙️", "🚕", "🍎"],
+  chicago: ["🚇", "🏙️", "🌊", "⭐", "🚉"],
   transit: ["🚇", "🚉", "🚊", "🚦", "🛤️"],
   maps: ["🗺️", "📍", "🧭", "➡️", "📌"],
   parks: ["🌳", "🌲", "🌿", "🍃", "🌱"],
@@ -159,7 +162,8 @@ const settingsSaveButtons = Array.from(document.querySelectorAll("[data-settings
 const settingsMenus = Array.from(document.querySelectorAll(".settings-menu"));
 const ctx = mapCanvas.getContext("2d");
 const panelCard = document.querySelector(".panel-card");
-const footerEmojiLinks = Array.from(document.querySelectorAll("[data-emoji-burst]"));
+const transitNote = document.getElementById("transitNote");
+const sourceLinks = document.getElementById("sourceLinks");
 
 const emojiBurstState = {
   mediaQuery: null,
@@ -435,6 +439,7 @@ function startEmojiBurstLoop(link, event) {
 }
 
 function setupFooterEmojiBursts() {
+  const footerEmojiLinks = Array.from(document.querySelectorAll("[data-emoji-burst]"));
   if (!footerEmojiLinks.length) return;
 
   for (const link of footerEmojiLinks) {
@@ -2882,10 +2887,38 @@ function applyCityCopy() {
   setSearchMetaText(`Pin the origin by typing a ${cityDisplayName()} address.`);
 }
 
+function applyCitySources() {
+  const meta = cityMeta();
+  if (transitNote && meta.transitNote) {
+    transitNote.textContent = `${meta.transitNote} Check out the `;
+    const githubLink = document.createElement("a");
+    githubLink.href = "https://github.com/AntCas/nyc-cartogram/tree/main";
+    githubLink.target = "_blank";
+    githubLink.rel = "noreferrer";
+    githubLink.textContent = "GitHub";
+    transitNote.appendChild(githubLink);
+    transitNote.append(".");
+  }
+  if (sourceLinks && Array.isArray(meta.sourceLinks)) {
+    sourceLinks.replaceChildren(
+      ...meta.sourceLinks.map((source) => {
+        const link = document.createElement("a");
+        link.href = source.url;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        link.dataset.emojiBurst = source.emoji || "maps";
+        link.textContent = source.label;
+        return link;
+      }),
+    );
+  }
+}
+
 async function init() {
   const response = await fetch(DATA_URL);
   state.data = await response.json();
   applyCityCopy();
+  applyCitySources();
   state.travelSettingsDefaults = getTravelSettingsDefaults();
   state.travelSettings = sanitizeTravelSettings(loadStoredTravelSettings(), state.travelSettingsDefaults);
   state.dynamicAdjacency = buildDynamicAdjacency();
