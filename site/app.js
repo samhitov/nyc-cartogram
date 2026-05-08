@@ -1,16 +1,7 @@
-const SUPPORTED_CITY_SLUGS = new Set(["nyc", "boston", "chicago", "philadelphia", "montreal"]);
-
-function detectCitySlug() {
-  const params = new URLSearchParams(window.location.search);
-  const queryCity = params.get("city");
-  if (SUPPORTED_CITY_SLUGS.has(queryCity)) return queryCity;
-  const firstPathSegment = window.location.pathname.split("/").filter(Boolean)[0];
-  if (SUPPORTED_CITY_SLUGS.has(firstPathSegment)) return firstPathSegment;
-  return "nyc";
-}
-
-const CITY_SLUG = detectCitySlug();
-const DATA_URL = new URL(`./data/${CITY_SLUG}/commute_map_data.json`, import.meta.url).toString();
+let locationRegistry = null;
+let currentLocation = null;
+let CITY_SLUG = "nyc";
+let DATA_URL = "";
 const DEFAULT_TRANSIT_TIME_MINUTES = 4;
 const DEFAULT_MAX_TIME_MINUTES = 60;
 const MIN_AREA_WEIGHT = 1;
@@ -48,14 +39,10 @@ const EMOJI_BURST_PER_TICK = 3;
 const EMOJI_BURST_LIFETIME_MS = 900;
 const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 36;
 const METERS_PER_MINUTE_PER_MPH = 26.8224;
-const SETTINGS_STORAGE_KEY = `${CITY_SLUG}-cartogram-settings-v1`;
+const SETTINGS_STORAGE_KEY_VERSION = "cartogram-settings-v1";
 
 const EMOJI_BURST_SETS = {
   github: ["💻", "🖥️", "⌨️", "⚙️", "🧑‍💻"],
-  nyc: ["🗽", "🌆", "🏙️", "🚕", "🍎"],
-  chicago: ["🚇", "🏙️", "🌊", "⭐", "🚉"],
-  philadelphia: ["🚇", "🔔", "🏙️", "🚉", "🌳"],
-  montreal: ["🚇", "🍁", "🏙️", "🚉", "🌉"],
   transit: ["🚇", "🚉", "🚊", "🚦", "🛤️"],
   maps: ["🗺️", "📍", "🧭", "➡️", "📌"],
   parks: ["🌳", "🌲", "🌿", "🍃", "🌱"],
@@ -64,6 +51,7 @@ const EMOJI_BURST_SETS = {
   linkedin: ["💼", "📈", "🤝", "🧠", "📊"],
   coffee: ["☕", "🥤", "🧋", "🍵"],
 };
+const DEFAULT_CITY_EMOJI_BURST = ["🚇", "🏙️", "🚉", "📍", "🗺️"];
 
 const state = {
   data: null,
@@ -180,6 +168,27 @@ function cityMeta() {
   return state.data?.meta ?? {};
 }
 
+async function loadLocationRegistry() {
+  const registryUrl = new URL("./data/locations.json", import.meta.url).toString();
+  const response = await fetch(registryUrl);
+  return response.json();
+}
+
+function detectCitySlug(registry) {
+  const supportedSlugs = new Set(registry.cities.map((city) => city.slug));
+  const params = new URLSearchParams(window.location.search);
+  const queryCity = params.get("city");
+  if (supportedSlugs.has(queryCity)) return queryCity;
+  const firstPathSegment = window.location.pathname.split("/").filter(Boolean)[0];
+  if (supportedSlugs.has(firstPathSegment)) return firstPathSegment;
+  return registry.defaultSlug || "nyc";
+}
+
+function selectCurrentLocation(registry) {
+  const slug = detectCitySlug(registry);
+  return registry.cities.find((city) => city.slug === slug) || registry.cities[0];
+}
+
 function cityDisplayName() {
   return cityMeta().displayName || "New York City";
 }
@@ -206,6 +215,10 @@ function cityDownloadPrefix() {
 
 function cityUrlLabel() {
   return cityMeta().urlLabel || `castrio.me/${CITY_SLUG}`;
+}
+
+function settingsStorageKey() {
+  return `${CITY_SLUG}-${SETTINGS_STORAGE_KEY_VERSION}`;
 }
 
 const searchUis = [
@@ -294,7 +307,7 @@ function currentTravelSettings() {
 
 function loadStoredTravelSettings() {
   try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(settingsStorageKey());
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (error) {
@@ -305,7 +318,7 @@ function loadStoredTravelSettings() {
 
 function persistTravelSettings() {
   try {
-    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(currentTravelSettings()));
+    window.localStorage.setItem(settingsStorageKey(), JSON.stringify(currentTravelSettings()));
   } catch (error) {
     console.error(error);
   }
@@ -374,9 +387,16 @@ function stopEmojiBurstLoop() {
   emojiBurstState.activeLink = null;
 }
 
+function emojiBurstSet(theme) {
+  if (theme === "city") {
+    return currentLocation?.emojiBurst?.length ? currentLocation.emojiBurst : DEFAULT_CITY_EMOJI_BURST;
+  }
+  return EMOJI_BURST_SETS[theme] || EMOJI_BURST_SETS.maps;
+}
+
 function emitEmojiBurst(link, originX, originY) {
   const theme = link.dataset.emojiBurst;
-  const emojis = EMOJI_BURST_SETS[theme];
+  const emojis = emojiBurstSet(theme);
   if (!emojis?.length) return;
 
   const layer = ensureEmojiBurstLayer();
@@ -2925,6 +2945,11 @@ function applyCitySources() {
 }
 
 async function init() {
+  locationRegistry = await loadLocationRegistry();
+  currentLocation = selectCurrentLocation(locationRegistry);
+  CITY_SLUG = currentLocation.slug;
+  DATA_URL = new URL(currentLocation.dataUrl, import.meta.url).toString();
+
   const response = await fetch(DATA_URL);
   state.data = await response.json();
   applyCityCopy();
