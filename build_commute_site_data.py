@@ -14,6 +14,7 @@ import urllib.request
 import urllib.error
 import zipfile
 from collections import Counter, defaultdict
+from copy import deepcopy
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 from xml.etree import ElementTree as ET
@@ -21,138 +22,14 @@ from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
+LOCATIONS_DIR = ROOT / "locations"
 SITE_DATA_PATH = ROOT / "site" / "data" / "commute_map_data.json"
+FRONTEND_LOCATIONS_PATH = ROOT / "site" / "data" / "locations.json"
 
-NYC_BOROUGHS_PATH = DATA_DIR / "borough_boundaries.geojson"
-NYC_PARKS_PATH = DATA_DIR / "parks_open_space.geojson"
-NYC_STREETS_PATH = DATA_DIR / "osm_major_streets.json"
-NYC_GTFS_PATH = DATA_DIR / "mta_gtfs_subway.zip"
-NYC_COUNTIES_KML_ZIP_PATH = DATA_DIR / "cb_2024_us_county_500k.zip"
-BOSTON_AREAS_PATH = DATA_DIR / "boston_municipalities.geojson"
-BOSTON_LAND_AREAS_PATH = DATA_DIR / "boston_land_municipalities.geojson"
-BOSTON_OPEN_SPACE_PATH = DATA_DIR / "boston_open_space.geojson"
-BOSTON_STREETS_PATH = DATA_DIR / "boston_osm_major_streets.json"
-BOSTON_GTFS_PATH = DATA_DIR / "mbta_gtfs.zip"
-CHICAGO_DATA_DIR = DATA_DIR / "chicago"
-CHICAGO_AREAS_PATH = CHICAGO_DATA_DIR / "municipalities.geojson"
-CHICAGO_LAND_AREAS_PATH = CHICAGO_DATA_DIR / "land_municipalities.geojson"
-CHICAGO_STREETS_PATH = CHICAGO_DATA_DIR / "osm_major_streets.json"
-CHICAGO_GTFS_PATH = CHICAGO_DATA_DIR / "cta_gtfs.zip"
-
-BOSTON_MUNICIPALITIES = (
-    "Boston",
-    "Brookline",
-    "Newton",
-    "Cambridge",
-    "Somerville",
-    "Quincy",
-    "Milton",
-    "Revere",
-    "Medford",
-    "Malden",
-    "Braintree",
-)
-BOSTON_RAPID_TRANSIT_ROUTES = {
-    "Red",
-    "Orange",
-    "Blue",
-    "Green-B",
-    "Green-C",
-    "Green-D",
-    "Green-E",
-    "Mattapan",
-}
-BOSTON_MBTA_GTFS_URL = "https://cdn.mbta.com/MBTA_GTFS.zip"
-BOSTON_MUNICIPALITIES_URL = (
-    "https://arcgisserver.digital.mass.gov/arcgisserver/rest/services/DPH/Political_Boundaries/MapServer/1/query"
-)
 BOSTON_OPEN_SPACE_URL = (
     "https://gis.eea.mass.gov/server/rest/services/Protected_and_Recreational_OpenSpace_Polygons/FeatureServer/0/query"
 )
 BOSTON_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-CHICAGO_CTA_GTFS_URL = "https://www.transitchicago.com/downloads/sch_data/google_transit.zip"
-CHICAGO_MUNICIPALITIES_URL = (
-    "https://services.arcgis.com/F7DSX1DSNSiWmOqh/arcgis/rest/services/"
-    "Cook_County_Municipalities/FeatureServer/0/query"
-)
-PHILADELPHIA_DATA_DIR = DATA_DIR / "philadelphia"
-PHILADELPHIA_AREAS_PATH = PHILADELPHIA_DATA_DIR / "municipalities.geojson"
-PHILADELPHIA_LAND_AREAS_PATH = PHILADELPHIA_DATA_DIR / "land_municipalities.geojson"
-PHILADELPHIA_STREETS_PATH = PHILADELPHIA_DATA_DIR / "osm_major_streets.json"
-PHILADELPHIA_GTFS_PATH = PHILADELPHIA_DATA_DIR / "septa_gtfs.zip"
-PHILADELPHIA_SEPTA_GTFS_URL = "https://github.com/septadev/GTFS/releases/latest/download/gtfs_public.zip"
-US_CENSUS_COUNTY_SUBDIVISIONS_URL = (
-    "https://tigerweb.geo.census.gov/arcgis/rest/services/"
-    "TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/1/query"
-)
-MONTREAL_DATA_DIR = DATA_DIR / "montreal"
-MONTREAL_AREAS_PATH = MONTREAL_DATA_DIR / "municipalities.geojson"
-MONTREAL_LAND_AREAS_PATH = MONTREAL_DATA_DIR / "land_municipalities.geojson"
-MONTREAL_STREETS_PATH = MONTREAL_DATA_DIR / "osm_major_streets.json"
-MONTREAL_GTFS_PATH = MONTREAL_DATA_DIR / "stm_gtfs.zip"
-MONTREAL_STM_GTFS_URL = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip"
-CANADA_CENSUS_SUBDIVISIONS_URL = (
-    "https://geo.statcan.gc.ca/geo_wa/rest/services/"
-    "2025/lcsd000a25s_e/MapServer/0/query"
-)
-CHICAGO_MUNICIPALITIES = (
-    "Chicago",
-    "Cicero",
-    "Evanston",
-    "Forest Park",
-    "Oak Park",
-    "Rosemont",
-    "Skokie",
-    "Wilmette",
-)
-PHILADELPHIA_MUNICIPALITIES = (
-    "Philadelphia city",
-    "Upper Darby township",
-    "Millbourne borough",
-    "Norristown borough",
-)
-PHILADELPHIA_RAPID_TRANSIT_ROUTES = {
-    "B1",
-    "B2",
-    "B3",
-    "D1",
-    "D2",
-    "G1",
-    "L1",
-    "M1",
-    "T1",
-    "T2",
-    "T3",
-    "T4",
-    "T5",
-}
-MONTREAL_MUNICIPALITIES = (
-    "Montréal",
-    "Laval",
-    "Longueuil",
-)
-MONTREAL_LAND_MUNICIPALITIES = (
-    "Montréal",
-    "Laval",
-    "Longueuil",
-    "Brossard",
-    "Saint-Lambert",
-    "Boucherville",
-    "Mont-Royal",
-    "Westmount",
-    "Hampstead",
-    "Côte-Saint-Luc",
-    "Montréal-Ouest",
-    "Dorval",
-    "Pointe-Claire",
-    "Baie-D'Urfé",
-    "Sainte-Anne-de-Bellevue",
-    "Beaconsfield",
-    "Dollard-des-Ormeaux",
-    "Kirkland",
-    "Rosemère",
-)
-MONTREAL_METRO_ROUTES = {"1", "2", "4", "5"}
 
 GRID_COLS = 160
 GRID_ROWS = 160
@@ -181,222 +58,130 @@ Polygon = List[Ring]
 MultiPolygon = List[Polygon]
 
 
-LOCATION_CONFIGS = {
-    "nyc": {
-        "slug": "nyc",
-        "display_name": "New York City",
-        "short_name": "NYC",
-        "area_kind": "boroughs",
-        "output_path": SITE_DATA_PATH,
-        "city_output_path": ROOT / "site" / "data" / "nyc" / "commute_map_data.json",
-        "transit": {
-            "gtfs_path": NYC_GTFS_PATH,
-            "station_source": "nyc_station_json",
-            "include_route_types": {"1"},
-            "include_route_ids": {"SI"},
-            "exclude_route_ids": set(),
-        },
-        "coverage": {
-            "areas_path": NYC_BOROUGHS_PATH,
-            "area_name_property": "boroname",
-            "land_areas_path": None,
-        },
-        "context": {
-            "parks_path": NYC_PARKS_PATH,
-            "park_area_property": "shape_area",
-            "park_area_min": 70_000.0,
-            "streets_path": NYC_STREETS_PATH,
-            "external_land": "nyc_counties",
-            "counties_kml_path": NYC_COUNTIES_KML_ZIP_PATH,
-        },
-        "hooks": {
-            "manual_connection": "staten_island_ferry",
-        },
-        "ui": {
-            "search_query_suffix": "New York City",
-            "search_viewbox": "-74.30,40.95,-73.65,40.45",
-            "share_text": "Explore New York City by subway commute time with this interactive transit cartogram.",
-            "data_credits": "MTA GTFS, NYC Open Data, OpenStreetMap",
-            "download_prefix": "nyc-commute-cartogram",
-            "url_label": "castrio.me/nyc",
-        },
-    },
-    "boston": {
-        "slug": "boston",
-        "display_name": "Boston",
-        "short_name": "Boston",
-        "area_kind": "municipalities",
-        "output_path": ROOT / "site" / "data" / "boston" / "commute_map_data.json",
-        "city_output_path": ROOT / "site" / "data" / "boston" / "commute_map_data.json",
-        "transit": {
-            "gtfs_path": BOSTON_GTFS_PATH,
-            "gtfs_url": BOSTON_MBTA_GTFS_URL,
-            "station_source": "gtfs_parent_stations",
-            "include_route_types": set(),
-            "include_route_ids": BOSTON_RAPID_TRANSIT_ROUTES,
-            "exclude_route_ids": set(),
-        },
-        "coverage": {
-            "areas_path": BOSTON_AREAS_PATH,
-            "areas_url": BOSTON_MUNICIPALITIES_URL,
-            "area_name_property": "TOWNNAME",
-            "area_include_names": set(BOSTON_MUNICIPALITIES),
-            "land_areas_path": BOSTON_LAND_AREAS_PATH,
-            "land_areas_url": BOSTON_MUNICIPALITIES_URL,
-        },
-        "context": {
-            "parks_path": BOSTON_OPEN_SPACE_PATH,
-            "park_area_property": "GIS_ACRES",
-            "park_area_min": 1.6,
-            "streets_path": BOSTON_STREETS_PATH,
-            "external_land": None,
-        },
-        "hooks": {
-            "manual_connection": None,
-        },
-        "ui": {
-            "search_query_suffix": "Massachusetts",
-            "search_viewbox": "-71.30,42.45,-70.85,42.15",
-            "share_text": "Explore Boston by MBTA rapid-transit commute time with this interactive transit cartogram.",
-            "data_credits": "MBTA/MassDOT GTFS, MassGIS, OpenStreetMap",
-            "download_prefix": "boston-commute-cartogram",
-            "url_label": "castrio.me/boston",
-        },
-    },
-    "chicago": {
-        "slug": "chicago",
-        "display_name": "Chicago",
-        "short_name": "Chicago",
-        "area_kind": "municipalities",
-        "output_path": ROOT / "site" / "data" / "chicago" / "commute_map_data.json",
-        "city_output_path": ROOT / "site" / "data" / "chicago" / "commute_map_data.json",
-        "transit": {
-            "gtfs_path": CHICAGO_GTFS_PATH,
-            "gtfs_url": CHICAGO_CTA_GTFS_URL,
-            "station_source": "gtfs_parent_stations",
-            "include_route_types": {"1"},
-            "include_route_ids": set(),
-            "exclude_route_ids": set(),
-            "service_policy": "CTA L only. Excludes CTA buses and Metra.",
-        },
-        "coverage": {
-            "areas_path": CHICAGO_AREAS_PATH,
-            "areas_url": CHICAGO_MUNICIPALITIES_URL,
-            "area_name_property": "NAME",
-            "area_include_names": set(CHICAGO_MUNICIPALITIES),
-            "land_areas_path": CHICAGO_LAND_AREAS_PATH,
-            "land_areas_url": CHICAGO_MUNICIPALITIES_URL,
-        },
-        "context": {
-            "parks_path": None,
-            "park_area_property": None,
-            "park_area_min": 70000.0,
-            "streets_path": CHICAGO_STREETS_PATH,
-        },
-        "hooks": {
-            "manual_connection": None,
-        },
-        "ui": {
-            "search_query_suffix": "Chicago, Illinois",
-            "search_viewbox": "-87.95,42.10,-87.45,41.55",
-            "share_text": "Explore Chicago by CTA L commute time with this interactive transit cartogram.",
-            "data_credits": "CTA GTFS, Cook County open data, OpenStreetMap",
-            "download_prefix": "chicago-commute-cartogram",
-            "url_label": "castrio.me/chicago",
-        },
-    },
-    "philadelphia": {
-        "slug": "philadelphia",
-        "display_name": "Philadelphia",
-        "short_name": "Philly",
-        "area_kind": "municipalities",
-        "output_path": ROOT / "site" / "data" / "philadelphia" / "commute_map_data.json",
-        "city_output_path": ROOT / "site" / "data" / "philadelphia" / "commute_map_data.json",
-        "transit": {
-            "gtfs_path": PHILADELPHIA_GTFS_PATH,
-            "gtfs_url": PHILADELPHIA_SEPTA_GTFS_URL,
-            "gtfs_member": "google_bus.zip",
-            "station_source": "gtfs_parent_stations",
-            "include_route_types": set(),
-            "include_route_ids": PHILADELPHIA_RAPID_TRANSIT_ROUTES,
-            "exclude_route_ids": set(),
-            "service_policy": "SEPTA fixed-guideway rapid transit. Excludes ordinary buses and Regional Rail.",
-        },
-        "coverage": {
-            "areas_path": PHILADELPHIA_AREAS_PATH,
-            "areas_url": US_CENSUS_COUNTY_SUBDIVISIONS_URL,
-            "area_name_property": "NAME",
-            "area_include_names": set(PHILADELPHIA_MUNICIPALITIES),
-            "where": "STATE = '42'",
-            "land_areas_path": PHILADELPHIA_LAND_AREAS_PATH,
-            "land_areas_url": US_CENSUS_COUNTY_SUBDIVISIONS_URL,
-            "land_where": "STATE = '42' AND COUNTY IN ('101', '045', '091', '017')",
-        },
-        "context": {
-            "parks_path": None,
-            "park_area_property": None,
-            "park_area_min": 70000.0,
-            "streets_path": PHILADELPHIA_STREETS_PATH,
-        },
-        "hooks": {
-            "manual_connection": None,
-        },
-        "ui": {
-            "search_query_suffix": "Philadelphia, Pennsylvania",
-            "search_viewbox": "-75.35,40.20,-74.95,39.80",
-            "share_text": "Explore Philadelphia by SEPTA rapid-transit commute time with this interactive transit cartogram.",
-            "data_credits": "SEPTA GTFS, U.S. Census TIGERweb, OpenStreetMap",
-            "download_prefix": "philadelphia-commute-cartogram",
-            "url_label": "castrio.me/philadelphia",
-        },
-    },
-    "montreal": {
-        "slug": "montreal",
-        "display_name": "Montreal",
-        "short_name": "Montreal",
-        "area_kind": "municipalities",
-        "output_path": ROOT / "site" / "data" / "montreal" / "commute_map_data.json",
-        "city_output_path": ROOT / "site" / "data" / "montreal" / "commute_map_data.json",
-        "transit": {
-            "gtfs_path": MONTREAL_GTFS_PATH,
-            "gtfs_url": MONTREAL_STM_GTFS_URL,
-            "station_source": "gtfs_parent_stations",
-            "include_route_types": set(),
-            "include_route_ids": MONTREAL_METRO_ROUTES,
-            "exclude_route_ids": set(),
-            "service_policy": "STM Metro only. Excludes STM buses and commuter rail.",
-        },
-        "coverage": {
-            "areas_path": MONTREAL_AREAS_PATH,
-            "areas_url": CANADA_CENSUS_SUBDIVISIONS_URL,
-            "area_name_property": "CSDNAME",
-            "area_include_names": set(MONTREAL_MUNICIPALITIES),
-            "where": "PRUID = '24'",
-            "land_areas_path": MONTREAL_LAND_AREAS_PATH,
-            "land_areas_url": CANADA_CENSUS_SUBDIVISIONS_URL,
-            "land_where": "PRUID = '24'",
-            "land_include_names": set(MONTREAL_LAND_MUNICIPALITIES),
-        },
-        "context": {
-            "parks_path": None,
-            "park_area_property": None,
-            "park_area_min": 70000.0,
-            "streets_path": MONTREAL_STREETS_PATH,
-        },
-        "hooks": {
-            "manual_connection": None,
-        },
-        "ui": {
-            "search_query_suffix": "Montreal, Quebec",
-            "search_viewbox": "-73.95,45.75,-73.35,45.35",
-            "share_text": "Explore Montreal by STM Metro commute time with this interactive transit cartogram.",
-            "data_credits": "STM GTFS, Statistics Canada, OpenStreetMap",
-            "download_prefix": "montreal-commute-cartogram",
-            "url_label": "castrio.me/montreal",
-        },
-    },
+PATH_KEYS = {
+    "gtfs_path",
+    "output_path",
+    "city_output_path",
+    "areas_path",
+    "land_areas_path",
+    "parks_path",
+    "streets_path",
+    "counties_kml_path",
+}
+SET_KEYS = {
+    "include_route_types",
+    "include_route_ids",
+    "exclude_route_ids",
+    "area_include_names",
+    "land_include_names",
+}
+MANIFEST_KEY_MAP = {
+    "displayName": "display_name",
+    "shortName": "short_name",
+    "areaKind": "area_kind",
+    "outputPath": "output_path",
+    "cityOutputPath": "city_output_path",
+    "gtfsPath": "gtfs_path",
+    "gtfsUrl": "gtfs_url",
+    "gtfsMember": "gtfs_member",
+    "stationSource": "station_source",
+    "includeRouteTypes": "include_route_types",
+    "includeRouteIds": "include_route_ids",
+    "excludeRouteIds": "exclude_route_ids",
+    "servicePolicy": "service_policy",
+    "areasPath": "areas_path",
+    "areasUrl": "areas_url",
+    "areaNameProperty": "area_name_property",
+    "areaIncludeNames": "area_include_names",
+    "landAreasPath": "land_areas_path",
+    "landAreasUrl": "land_areas_url",
+    "landWhere": "land_where",
+    "landIncludeNames": "land_include_names",
+    "parksPath": "parks_path",
+    "parkAreaProperty": "park_area_property",
+    "parkAreaMin": "park_area_min",
+    "streetsPath": "streets_path",
+    "externalLand": "external_land",
+    "countiesKmlPath": "counties_kml_path",
+    "manualConnection": "manual_connection",
+    "searchQuerySuffix": "search_query_suffix",
+    "searchViewbox": "search_viewbox",
+    "shareText": "share_text",
+    "dataCredits": "data_credits",
+    "downloadPrefix": "download_prefix",
+    "urlLabel": "url_label",
+    "emojiBurst": "emoji_burst",
 }
 
+
+def manifest_key_to_config_key(key: str) -> str:
+    return MANIFEST_KEY_MAP.get(key, key)
+
+
+def resolve_repo_path(value: str | None) -> Path | None:
+    if value is None:
+        return None
+    path = ROOT / value
+    resolved = path.resolve()
+    root_resolved = ROOT.resolve()
+    if resolved != root_resolved and root_resolved not in resolved.parents:
+        raise ValueError(f"Manifest path escapes repository: {value}")
+    return path
+
+
+def normalize_manifest_section(section: dict) -> dict:
+    normalized = {}
+    for key, value in section.items():
+        config_key = manifest_key_to_config_key(key)
+        if config_key in PATH_KEYS:
+            normalized[config_key] = resolve_repo_path(value)
+        elif config_key in SET_KEYS:
+            normalized[config_key] = set(value)
+        else:
+            normalized[config_key] = value
+    return normalized
+
+
+def normalize_manifest(raw: dict) -> dict:
+    config = {
+        "slug": raw["slug"],
+        "display_name": raw["displayName"],
+        "short_name": raw.get("shortName", raw["displayName"]),
+        "area_kind": raw["areaKind"],
+        "output_path": resolve_repo_path(raw["outputPath"]),
+        "city_output_path": resolve_repo_path(raw["cityOutputPath"]),
+        "transit": normalize_manifest_section(raw["transit"]),
+        "coverage": normalize_manifest_section(raw["coverage"]),
+        "context": normalize_manifest_section(raw["context"]),
+        "hooks": normalize_manifest_section(raw.get("hooks", {})),
+        "ui": normalize_manifest_section(raw["ui"]),
+    }
+    config["transit"].setdefault("include_route_types", set())
+    config["transit"].setdefault("include_route_ids", set())
+    config["transit"].setdefault("exclude_route_ids", set())
+    config["coverage"].setdefault("land_areas_path", None)
+    config["context"].setdefault("parks_path", None)
+    config["context"].setdefault("park_area_property", None)
+    config["context"].setdefault("streets_path", None)
+    config["context"].setdefault("external_land", None)
+    config["hooks"].setdefault("manual_connection", None)
+    return config
+
+
+def load_location_configs() -> dict[str, dict]:
+    configs = {}
+    for path in sorted(LOCATIONS_DIR.glob("*.json")):
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        slug = raw["slug"]
+        if slug != path.stem:
+            raise ValueError(f"Manifest slug {slug!r} does not match filename {path.name!r}")
+        configs[slug] = normalize_manifest(raw)
+    if not configs:
+        raise ValueError(f"No location manifests found in {LOCATIONS_DIR}")
+    return configs
+
+
+LOCATION_CONFIGS = load_location_configs()
 
 def transit_config(config: dict) -> dict:
     return config["transit"]
