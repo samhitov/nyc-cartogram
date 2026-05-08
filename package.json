@@ -2,9 +2,10 @@
   "name": "nyc-cartogram",
   "private": true,
   "scripts": {
-    "check": "npm run check:data && npm run check:frontend-landmask && npm run check:js",
+    "check": "npm run check:manifests && npm run check:data && npm run check:frontend-landmask && npm run check:js",
     "check:data": "python3 scripts/check_commute_data.py",
     "check:frontend-landmask": "python3 scripts/check_frontend_landmask.py",
+    "check:manifests": "python3 scripts/check_location_manifests.py",
     "check:js": "node --check site/app.js && node --check src/worker.js",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
