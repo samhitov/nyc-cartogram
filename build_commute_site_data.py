@@ -85,6 +85,16 @@ US_CENSUS_COUNTY_SUBDIVISIONS_URL = (
     "https://tigerweb.geo.census.gov/arcgis/rest/services/"
     "TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/1/query"
 )
+MONTREAL_DATA_DIR = DATA_DIR / "montreal"
+MONTREAL_AREAS_PATH = MONTREAL_DATA_DIR / "municipalities.geojson"
+MONTREAL_LAND_AREAS_PATH = MONTREAL_DATA_DIR / "land_municipalities.geojson"
+MONTREAL_STREETS_PATH = MONTREAL_DATA_DIR / "osm_major_streets.json"
+MONTREAL_GTFS_PATH = MONTREAL_DATA_DIR / "stm_gtfs.zip"
+MONTREAL_STM_GTFS_URL = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip"
+CANADA_CENSUS_SUBDIVISIONS_URL = (
+    "https://geo.statcan.gc.ca/geo_wa/rest/services/"
+    "2025/lcsd000a25s_e/MapServer/0/query"
+)
 CHICAGO_MUNICIPALITIES = (
     "Chicago",
     "Cicero",
@@ -116,6 +126,33 @@ PHILADELPHIA_RAPID_TRANSIT_ROUTES = {
     "T4",
     "T5",
 }
+MONTREAL_MUNICIPALITIES = (
+    "Montréal",
+    "Laval",
+    "Longueuil",
+)
+MONTREAL_LAND_MUNICIPALITIES = (
+    "Montréal",
+    "Laval",
+    "Longueuil",
+    "Brossard",
+    "Saint-Lambert",
+    "Boucherville",
+    "Mont-Royal",
+    "Westmount",
+    "Hampstead",
+    "Côte-Saint-Luc",
+    "Montréal-Ouest",
+    "Dorval",
+    "Pointe-Claire",
+    "Baie-D'Urfé",
+    "Sainte-Anne-de-Bellevue",
+    "Beaconsfield",
+    "Dollard-des-Ormeaux",
+    "Kirkland",
+    "Rosemère",
+)
+MONTREAL_METRO_ROUTES = {"1", "2", "4", "5"}
 
 GRID_COLS = 160
 GRID_ROWS = 160
@@ -313,6 +350,51 @@ LOCATION_CONFIGS = {
             "url_label": "castrio.me/philadelphia",
         },
     },
+    "montreal": {
+        "slug": "montreal",
+        "display_name": "Montreal",
+        "short_name": "Montreal",
+        "area_kind": "municipalities",
+        "output_path": ROOT / "site" / "data" / "montreal" / "commute_map_data.json",
+        "city_output_path": ROOT / "site" / "data" / "montreal" / "commute_map_data.json",
+        "transit": {
+            "gtfs_path": MONTREAL_GTFS_PATH,
+            "gtfs_url": MONTREAL_STM_GTFS_URL,
+            "station_source": "gtfs_parent_stations",
+            "include_route_types": set(),
+            "include_route_ids": MONTREAL_METRO_ROUTES,
+            "exclude_route_ids": set(),
+            "service_policy": "STM Metro only. Excludes STM buses and commuter rail.",
+        },
+        "coverage": {
+            "areas_path": MONTREAL_AREAS_PATH,
+            "areas_url": CANADA_CENSUS_SUBDIVISIONS_URL,
+            "area_name_property": "CSDNAME",
+            "area_include_names": set(MONTREAL_MUNICIPALITIES),
+            "where": "PRUID = '24'",
+            "land_areas_path": MONTREAL_LAND_AREAS_PATH,
+            "land_areas_url": CANADA_CENSUS_SUBDIVISIONS_URL,
+            "land_where": "PRUID = '24'",
+            "land_include_names": set(MONTREAL_LAND_MUNICIPALITIES),
+        },
+        "context": {
+            "parks_path": None,
+            "park_area_property": None,
+            "park_area_min": 70000.0,
+            "streets_path": MONTREAL_STREETS_PATH,
+        },
+        "hooks": {
+            "manual_connection": None,
+        },
+        "ui": {
+            "search_query_suffix": "Montreal, Quebec",
+            "search_viewbox": "-73.95,45.75,-73.35,45.35",
+            "share_text": "Explore Montreal by STM Metro commute time with this interactive transit cartogram.",
+            "data_credits": "STM GTFS, Statistics Canada, OpenStreetMap",
+            "download_prefix": "montreal-commute-cartogram",
+            "url_label": "castrio.me/montreal",
+        },
+    },
 }
 
 
@@ -421,7 +503,7 @@ def ensure_arcgis_coverage(config: dict) -> None:
     name_property = coverage["area_name_property"]
     where = coverage.get("where", "1=1")
     if include_names:
-        quoted = "', '".join(sorted(include_names))
+        quoted = "', '".join(name.replace("'", "''") for name in sorted(include_names))
         where = f"({where}) AND {name_property} IN ('{quoted}')"
 
     payload = query_arcgis_geojson(
@@ -447,10 +529,17 @@ def ensure_arcgis_land_coverage(config: dict) -> None:
     if not land_areas_url:
         raise FileNotFoundError(f"Missing land area file for {config['slug']}: {land_areas_path}")
 
+    where = coverage.get("land_where", "1=1")
+    include_names = coverage.get("land_include_names")
+    if include_names:
+        name_property = coverage["area_name_property"]
+        quoted = "', '".join(name.replace("'", "''") for name in sorted(include_names))
+        where = f"({where}) AND {name_property} IN ('{quoted}')"
+
     payload = query_arcgis_geojson(
         land_areas_url,
         {
-            "where": coverage.get("land_where", "1=1"),
+            "where": where,
             "outFields": "*",
             "outSR": 4326,
             "returnGeometry": "true",

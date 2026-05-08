@@ -38,6 +38,7 @@ PHILADELPHIA_RAPID_TRANSIT_ROUTES = {
     "T4",
     "T5",
 }
+MONTREAL_METRO_ROUTES = {"1", "2", "4", "5"}
 
 
 def fail(message: str) -> None:
@@ -196,6 +197,16 @@ def check_philadelphia(data: dict) -> None:
     require_land_mask_contains(data, -75.2750, 39.9800, "philadelphia land mask missing Lower Merion")
 
 
+def check_montreal(data: dict) -> None:
+    route_ids = set(data["routeStyles"])
+    require(MONTREAL_METRO_ROUTES.issubset(route_ids), "montreal missing one or more Metro routes")
+    require(route_ids.issubset(MONTREAL_METRO_ROUTES), "montreal includes non-Metro route ids")
+    require(any(area.get("name") == "Montréal" for area in data["areas"]), "montreal missing Montreal area")
+    station_names = {station.get("name") for station in data["stations"]}
+    require("STATION BERRI-UQAM" in station_names, "montreal missing expected Berri-UQAM station")
+    require_land_mask_contains(data, -73.5143, 45.4932, "montreal land mask missing Saint-Lambert")
+
+
 def main() -> None:
     for city, path in DATASETS.items():
         if city in {"philadelphia", "montreal", "toronto", "vancouver", "dc"} and not path.exists():
@@ -211,6 +222,8 @@ def main() -> None:
             check_chicago(data)
         elif city == "philadelphia":
             check_philadelphia(data)
+        elif city == "montreal":
+            check_montreal(data)
         print(f"{city}: ok")
 
 
