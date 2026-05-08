@@ -31,8 +31,31 @@
   "ui": {
     "searchQuerySuffix": "New York City",
     "searchViewbox": "-74.30,40.95,-73.65,40.45",
+    "searchCountryCodes": "us",
     "shareText": "Explore New York City by subway commute time with this interactive transit cartogram.",
     "dataCredits": "MTA GTFS, NYC Open Data, OpenStreetMap",
+    "sourceLinks": [
+      {
+        "label": "NYC borough boundaries",
+        "url": "https://data.cityofnewyork.us/resource/gthc-hcne.geojson?$limit=100",
+        "emoji": "city"
+      },
+      {
+        "label": "MTA GTFS subway data",
+        "url": "https://new.mta.info/developers",
+        "emoji": "transit"
+      },
+      {
+        "label": "OpenStreetMap streets",
+        "url": "https://www.openstreetmap.org/",
+        "emoji": "maps"
+      },
+      {
+        "label": "NYC Parks open space",
+        "url": "https://www.nycgovparks.org/about/health-and-safety-guide/open-data",
+        "emoji": "parks"
+      }
+    ],
     "downloadPrefix": "nyc-commute-cartogram",
     "urlLabel": "castrio.me/nyc",
     "emojiBurst": [

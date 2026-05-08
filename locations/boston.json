@@ -50,8 +50,31 @@
   "ui": {
     "searchQuerySuffix": "Massachusetts",
     "searchViewbox": "-71.30,42.45,-70.85,42.15",
+    "searchCountryCodes": "us",
     "shareText": "Explore Boston by MBTA rapid-transit commute time with this interactive transit cartogram.",
     "dataCredits": "MBTA/MassDOT GTFS, MassGIS, OpenStreetMap",
+    "sourceLinks": [
+      {
+        "label": "MBTA GTFS",
+        "url": "https://cdn.mbta.com/MBTA_GTFS.zip",
+        "emoji": "transit"
+      },
+      {
+        "label": "MassGIS municipal boundaries",
+        "url": "https://arcgisserver.digital.mass.gov/arcgisserver/rest/services/DPH/Political_Boundaries/MapServer/1/query",
+        "emoji": "maps"
+      },
+      {
+        "label": "MassGIS open space",
+        "url": "https://gis.eea.mass.gov/server/rest/services/Protected_and_Recreational_OpenSpace_Polygons/FeatureServer/0/query",
+        "emoji": "parks"
+      },
+      {
+        "label": "OpenStreetMap streets",
+        "url": "https://www.openstreetmap.org/",
+        "emoji": "maps"
+      }
+    ],
     "downloadPrefix": "boston-commute-cartogram",
     "urlLabel": "castrio.me/boston"
   }

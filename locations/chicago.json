@@ -40,8 +40,26 @@
   "ui": {
     "searchQuerySuffix": "Chicago, Illinois",
     "searchViewbox": "-87.95,42.10,-87.45,41.55",
+    "searchCountryCodes": "us",
     "shareText": "Explore Chicago by CTA L commute time with this interactive transit cartogram.",
     "dataCredits": "CTA GTFS, Cook County open data, OpenStreetMap",
+    "sourceLinks": [
+      {
+        "label": "CTA GTFS",
+        "url": "https://www.transitchicago.com/downloads/sch_data/google_transit.zip",
+        "emoji": "transit"
+      },
+      {
+        "label": "Cook County municipal boundaries",
+        "url": "https://services.arcgis.com/F7DSX1DSNSiWmOqh/arcgis/rest/services/Cook_County_Municipalities/FeatureServer/0/query",
+        "emoji": "maps"
+      },
+      {
+        "label": "OpenStreetMap streets",
+        "url": "https://www.openstreetmap.org/",
+        "emoji": "maps"
+      }
+    ],
     "downloadPrefix": "chicago-commute-cartogram",
     "urlLabel": "castrio.me/chicago",
     "emojiBurst": [

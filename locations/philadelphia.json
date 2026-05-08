@@ -51,8 +51,26 @@
   "ui": {
     "searchQuerySuffix": "Philadelphia, Pennsylvania",
     "searchViewbox": "-75.35,40.20,-74.95,39.80",
+    "searchCountryCodes": "us",
     "shareText": "Explore Philadelphia by SEPTA rapid-transit commute time with this interactive transit cartogram.",
     "dataCredits": "SEPTA GTFS, U.S. Census TIGERweb, OpenStreetMap",
+    "sourceLinks": [
+      {
+        "label": "SEPTA GTFS",
+        "url": "https://github.com/septadev/GTFS/releases/latest/download/gtfs_public.zip",
+        "emoji": "transit"
+      },
+      {
+        "label": "U.S. Census TIGERweb boundaries",
+        "url": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/1/query",
+        "emoji": "maps"
+      },
+      {
+        "label": "OpenStreetMap streets",
+        "url": "https://www.openstreetmap.org/",
+        "emoji": "maps"
+      }
+    ],
     "downloadPrefix": "philadelphia-commute-cartogram",
     "urlLabel": "castrio.me/philadelphia",
     "emojiBurst": [

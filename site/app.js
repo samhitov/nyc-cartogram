@@ -205,6 +205,10 @@ function citySearchViewbox() {
   return cityMeta().searchViewbox || "-74.30,40.95,-73.65,40.45";
 }
 
+function citySearchCountryCodes() {
+  return cityMeta().searchCountryCodes || "";
+}
+
 function cityDataCredits() {
   return cityMeta().dataCredits || "MTA GTFS, NYC Open Data, OpenStreetMap";
 }
@@ -2841,11 +2845,14 @@ async function searchAddress(query) {
     q: `${query}, ${citySearchQuerySuffix()}`,
     format: "jsonv2",
     addressdetails: "1",
-    countrycodes: "us",
     limit: "5",
     bounded: "1",
     viewbox: citySearchViewbox(),
   });
+  const countryCodes = citySearchCountryCodes();
+  if (countryCodes) {
+    params.set("countrycodes", countryCodes);
+  }
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: {
       Accept: "application/json",
@@ -2919,8 +2926,11 @@ function applyCityCopy() {
 
 function applyCitySources() {
   const meta = cityMeta();
-  if (transitNote && meta.transitNote) {
-    transitNote.textContent = `${meta.transitNote} Check out the `;
+  if (transitNote) {
+    transitNote.textContent =
+      "Travel times are estimated from static GTFS trips plus short walking access to and from stations. " +
+      "The app does not model ordinary buses, commuter/regional rail, or real-time schedules. " +
+      "The only ferry service included is NYC's Staten Island Ferry. Check out the ";
     const githubLink = document.createElement("a");
     githubLink.href = "https://github.com/AntCas/nyc-cartogram/tree/main";
     githubLink.target = "_blank";

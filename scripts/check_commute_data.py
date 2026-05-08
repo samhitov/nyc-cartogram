@@ -39,6 +39,13 @@ PHILADELPHIA_RAPID_TRANSIT_ROUTES = {
     "T5",
 }
 MONTREAL_METRO_ROUTES = {"1", "2", "4", "5"}
+EXPECTED_SEARCH_COUNTRY_CODES = {
+    "nyc": "us",
+    "boston": "us",
+    "chicago": "us",
+    "philadelphia": "us",
+    "montreal": "ca",
+}
 
 
 def fail(message: str) -> None:
@@ -108,6 +115,16 @@ def check_common(city: str, data: dict) -> None:
     require(meta.get("displayName"), f"{city} missing displayName")
     require(meta.get("searchQuerySuffix"), f"{city} missing searchQuerySuffix")
     require(meta.get("searchViewbox"), f"{city} missing searchViewbox")
+    if city in EXPECTED_SEARCH_COUNTRY_CODES:
+        require(
+            meta.get("searchCountryCodes") == EXPECTED_SEARCH_COUNTRY_CODES[city],
+            f"{city} missing expected searchCountryCodes",
+        )
+    source_links = meta.get("sourceLinks")
+    require(isinstance(source_links, list) and source_links, f"{city} missing sourceLinks")
+    for source in source_links:
+        require(isinstance(source.get("label"), str) and source["label"], f"{city} sourceLink missing label")
+        require(isinstance(source.get("url"), str) and source["url"], f"{city} sourceLink missing url")
 
     for key in ("areas", "boroughs", "parks", "streets", "routes", "stations", "routeStates", "stationStates", "adjacency", "cells", "mask", "routeStyles"):
         require(key in data, f"{city} missing {key}")

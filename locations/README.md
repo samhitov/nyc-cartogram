@@ -37,3 +37,5 @@ Hooks are exceptional. Use them only when data cannot be represented declarative
 ## Optional UI Fields
 
 `ui.emojiBurst` is optional. If omitted, the frontend uses a generic city/transit emoji fallback.
+`ui.searchCountryCodes` is optional. If present, it is passed to Nominatim as a lowercase comma-separated `countrycodes` filter.
+`ui.sourceLinks` is optional but recommended for each supported location. Use it for transit, boundary, and context data sources that should replace the default footer links.

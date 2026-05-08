@@ -70,6 +70,17 @@ def require_string_list(value, label: str) -> None:
     require(all(isinstance(item, str) for item in value), f"{label} must contain only strings. See locations/README.md.")
 
 
+def require_source_links(value, label: str) -> None:
+    require(isinstance(value, list), f"{label} must be a list. See locations/README.md.")
+    for index, source in enumerate(value):
+        source_label = f"{label}[{index}]"
+        require(isinstance(source, dict), f"{source_label} must be an object. See locations/README.md.")
+        require(isinstance(source.get("label"), str) and source["label"], f"{source_label}.label is required. See locations/README.md.")
+        require(isinstance(source.get("url"), str) and source["url"], f"{source_label}.url is required. See locations/README.md.")
+        if "emoji" in source:
+            require(isinstance(source["emoji"], str) and source["emoji"], f"{source_label}.emoji must be a string. See locations/README.md.")
+
+
 def require_repo_relative_path(value, label: str) -> None:
     if value is None:
         return
@@ -121,6 +132,13 @@ def load_manifests() -> dict[str, dict]:
         require(isinstance(ui, dict), f"{slug} ui must be an object. See locations/README.md.")
         if "emojiBurst" in ui:
             require_string_list(ui["emojiBurst"], f"{slug} ui.emojiBurst")
+        if "searchCountryCodes" in ui:
+            require(
+                isinstance(ui["searchCountryCodes"], str) and re.fullmatch(r"[a-z]{2}(,[a-z]{2})*", ui["searchCountryCodes"]),
+                f"{slug} ui.searchCountryCodes must be lowercase comma-separated country codes. See locations/README.md.",
+            )
+        if "sourceLinks" in ui:
+            require_source_links(ui["sourceLinks"], f"{slug} ui.sourceLinks")
 
         for key in PATH_KEYS:
             require_repo_relative_path(nested_value(manifest, key), f"{slug} {key}")

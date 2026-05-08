@@ -61,8 +61,26 @@
   "ui": {
     "searchQuerySuffix": "Montreal, Quebec",
     "searchViewbox": "-73.95,45.75,-73.35,45.35",
+    "searchCountryCodes": "ca",
     "shareText": "Explore Montreal by STM Metro commute time with this interactive transit cartogram.",
     "dataCredits": "STM GTFS, Statistics Canada, OpenStreetMap",
+    "sourceLinks": [
+      {
+        "label": "STM GTFS",
+        "url": "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip",
+        "emoji": "transit"
+      },
+      {
+        "label": "Statistics Canada boundaries",
+        "url": "https://geo.statcan.gc.ca/geo_wa/rest/services/2025/lcsd000a25s_e/MapServer/0/query",
+        "emoji": "maps"
+      },
+      {
+        "label": "OpenStreetMap streets",
+        "url": "https://www.openstreetmap.org/",
+        "emoji": "maps"
+      }
+    ],
     "downloadPrefix": "montreal-commute-cartogram",
     "urlLabel": "castrio.me/montreal",
     "emojiBurst": [
