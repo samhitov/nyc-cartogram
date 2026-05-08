@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -35,6 +36,45 @@ def load_dataset(city: str, path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         fail(f"{city} data is not valid JSON: {error}")
+
+
+def lonlat_to_xy(lon: float, lat: float, lat0: float) -> list[float]:
+    meters_per_deg_lat = 111_320.0
+    meters_per_deg_lon = meters_per_deg_lat * math.cos(math.radians(lat0))
+    return [lon * meters_per_deg_lon, lat * meters_per_deg_lat]
+
+
+def point_in_ring(point: list[float], ring: list[list[float]]) -> bool:
+    x, y = point
+    inside = False
+    j = len(ring) - 1
+    for i, current in enumerate(ring):
+        xi, yi = current
+        xj, yj = ring[j]
+        intersects = (yi > y) != (yj > y)
+        if intersects:
+            x_hit = ((xj - xi) * (y - yi)) / ((yj - yi) or 1e-12) + xi
+            if x < x_hit:
+                inside = not inside
+        j = i
+    return inside
+
+
+def point_in_polygon(point: list[float], polygon: list[list[list[float]]]) -> bool:
+    if not polygon or not point_in_ring(point, polygon[0]):
+        return False
+    return not any(point_in_ring(point, hole) for hole in polygon[1:])
+
+
+def point_in_polygons(point: list[float], polygons: list) -> bool:
+    return any(point_in_polygon(point, polygon) for polygon in polygons)
+
+
+def require_land_mask_contains(data: dict, lon: float, lat: float, message: str) -> None:
+    land_mask = data.get("landMask")
+    require(isinstance(land_mask, list) and land_mask, message)
+    point = lonlat_to_xy(lon, lat, data["meta"]["lat0"])
+    require(point_in_polygons(point, land_mask), message)
 
 
 def check_common(city: str, data: dict) -> None:
@@ -108,6 +148,7 @@ def check_boston(data: dict) -> None:
     require(route_ids.isdisjoint(SILVER_LINE_ROUTE_IDS), "boston unexpectedly includes Silver Line route ids")
     require(any(area.get("name") == "Boston" for area in data["areas"]), "boston missing Boston municipality")
     require(any(station.get("name") == "Park Street" for station in data["stations"]), "boston missing Park Street station")
+    require_land_mask_contains(data, -71.1564, 42.4154, "boston land mask missing Arlington")
 
 
 def check_chicago(data: dict) -> None:
@@ -116,6 +157,7 @@ def check_chicago(data: dict) -> None:
     require(all(route_id in CHICAGO_L_ROUTES for route_id in route_ids), "chicago includes non-L route ids")
     station_names = {station.get("name") for station in data["stations"]}
     require("Clark/Lake" in station_names or "State/Lake" in station_names, "chicago missing expected Loop station")
+    require_land_mask_contains(data, -87.7937, 41.8506, "chicago land mask missing Berwyn")
 
 
 def main() -> None:

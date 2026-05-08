@@ -28,11 +28,13 @@ NYC_STREETS_PATH = DATA_DIR / "osm_major_streets.json"
 NYC_GTFS_PATH = DATA_DIR / "mta_gtfs_subway.zip"
 NYC_COUNTIES_KML_ZIP_PATH = DATA_DIR / "cb_2024_us_county_500k.zip"
 BOSTON_AREAS_PATH = DATA_DIR / "boston_municipalities.geojson"
+BOSTON_LAND_AREAS_PATH = DATA_DIR / "boston_land_municipalities.geojson"
 BOSTON_OPEN_SPACE_PATH = DATA_DIR / "boston_open_space.geojson"
 BOSTON_STREETS_PATH = DATA_DIR / "boston_osm_major_streets.json"
 BOSTON_GTFS_PATH = DATA_DIR / "mbta_gtfs.zip"
 CHICAGO_DATA_DIR = DATA_DIR / "chicago"
 CHICAGO_AREAS_PATH = CHICAGO_DATA_DIR / "municipalities.geojson"
+CHICAGO_LAND_AREAS_PATH = CHICAGO_DATA_DIR / "land_municipalities.geojson"
 CHICAGO_STREETS_PATH = CHICAGO_DATA_DIR / "osm_major_streets.json"
 CHICAGO_GTFS_PATH = CHICAGO_DATA_DIR / "cta_gtfs.zip"
 
@@ -128,6 +130,7 @@ LOCATION_CONFIGS = {
         "coverage": {
             "areas_path": NYC_BOROUGHS_PATH,
             "area_name_property": "boroname",
+            "land_areas_path": None,
         },
         "context": {
             "parks_path": NYC_PARKS_PATH,
@@ -169,6 +172,8 @@ LOCATION_CONFIGS = {
             "areas_url": BOSTON_MUNICIPALITIES_URL,
             "area_name_property": "TOWNNAME",
             "area_include_names": set(BOSTON_MUNICIPALITIES),
+            "land_areas_path": BOSTON_LAND_AREAS_PATH,
+            "land_areas_url": BOSTON_MUNICIPALITIES_URL,
         },
         "context": {
             "parks_path": BOSTON_OPEN_SPACE_PATH,
@@ -210,6 +215,8 @@ LOCATION_CONFIGS = {
             "areas_url": CHICAGO_MUNICIPALITIES_URL,
             "area_name_property": "NAME",
             "area_include_names": set(CHICAGO_MUNICIPALITIES),
+            "land_areas_path": CHICAGO_LAND_AREAS_PATH,
+            "land_areas_url": CHICAGO_MUNICIPALITIES_URL,
         },
         "context": {
             "parks_path": None,
@@ -352,9 +359,33 @@ def ensure_arcgis_coverage(config: dict) -> None:
     write_json(areas_path, payload)
 
 
+def ensure_arcgis_land_coverage(config: dict) -> None:
+    coverage = coverage_config(config)
+    land_areas_path = coverage.get("land_areas_path")
+    if not land_areas_path:
+        return
+    if land_areas_path.exists() and geojson_has_features(land_areas_path):
+        return
+    land_areas_url = coverage.get("land_areas_url")
+    if not land_areas_url:
+        raise FileNotFoundError(f"Missing land area file for {config['slug']}: {land_areas_path}")
+
+    payload = query_arcgis_geojson(
+        land_areas_url,
+        {
+            "where": "1=1",
+            "outFields": "*",
+            "outSR": 4326,
+            "returnGeometry": "true",
+        },
+    )
+    write_json(land_areas_path, payload)
+
+
 def ensure_source_data(config: dict) -> None:
     ensure_static_gtfs(config)
     ensure_arcgis_coverage(config)
+    ensure_arcgis_land_coverage(config)
 
 
 def ensure_overpass_major_streets(config: dict, bbox_lonlat: Tuple[float, float, float, float]) -> None:
@@ -518,6 +549,12 @@ def bbox_intersects(a: Tuple[float, float, float, float], b: Tuple[float, float,
     return not (a[2] < b[0] or a[0] > b[2] or a[3] < b[1] or a[1] > b[3])
 
 
+def polygon_bounds(polygon: Polygon) -> Tuple[float, float, float, float]:
+    xs = [point[0] for ring in polygon for point in ring]
+    ys = [point[1] for ring in polygon for point in ring]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
 def point_in_ring(point: Point, ring: Sequence[Point]) -> bool:
     x, y = point
     inside = False
@@ -578,6 +615,19 @@ def extract_areas(payload: dict, lat0: float, config: dict) -> Tuple[list, Multi
             }
         )
     return areas, all_polygons
+
+
+def extract_land_mask(payload: dict, lat0: float, bbox: Tuple[float, float, float, float]) -> MultiPolygon:
+    land_polygons: MultiPolygon = []
+    for feature in payload["features"]:
+        for polygon_coords in iter_polygon_coordinate_sets(feature.get("geometry")):
+            polygon: Polygon = []
+            for ring_coords in polygon_coords:
+                ring = [lonlat_to_xy(lon, lat, lat0) for lon, lat in ring_coords]
+                polygon.append(simplify_ring(ring, 120.0))
+            if polygon and bbox_intersects(polygon_bounds(polygon), bbox):
+                land_polygons.append(polygon)
+    return land_polygons
 
 
 def extract_parks(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> list:
@@ -1167,6 +1217,13 @@ def main() -> None:
     if not areas:
         raise ValueError(f"No map areas found for {config['slug']}")
     bbox = bounds_of_multipolygon(all_polygons)
+    land_polygons = all_polygons
+    land_areas_path = coverage_config(config).get("land_areas_path")
+    if land_areas_path:
+        land_payload = load_json(land_areas_path)
+        land_polygons = extract_land_mask(land_payload, lat0, bbox)
+        if not land_polygons:
+            raise ValueError(f"No land mask polygons found for {config['slug']}")
     min_lon, min_lat = xy_to_lonlat((bbox[0], bbox[1]), lat0)
     max_lon, max_lat = xy_to_lonlat((bbox[2], bbox[3]), lat0)
     ensure_context_data(config, (min_lon, min_lat, max_lon, max_lat))
@@ -1194,7 +1251,7 @@ def main() -> None:
             station_states,
             adjacency,
         )
-    cells, mask = build_grid_cells(all_polygons, stations, bbox)
+    cells, mask = build_grid_cells(land_polygons, stations, bbox)
     ui = ui_config(config)
 
     output = {
@@ -1225,6 +1282,9 @@ def main() -> None:
         "areas": areas,
         "boroughs": areas,
         "externalLand": external_land,
+        "landMask": [[round_path(ring) for ring in polygon] for polygon in land_polygons]
+        if land_polygons is not all_polygons
+        else [],
         "parks": parks,
         "streets": streets,
         "routes": route_shapes,
