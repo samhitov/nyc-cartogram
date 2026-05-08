@@ -14,7 +14,6 @@ import urllib.request
 import urllib.error
 import zipfile
 from collections import Counter, defaultdict
-from copy import deepcopy
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 from xml.etree import ElementTree as ET
@@ -201,6 +200,35 @@ def hooks_config(config: dict) -> dict:
 
 def ui_config(config: dict) -> dict:
     return config["ui"]
+
+
+def city_data_url(config: dict) -> str:
+    return f"./data/{config['slug']}/commute_map_data.json"
+
+
+def build_frontend_location_registry(configs: dict) -> dict:
+    cities = []
+    for slug, config in sorted(configs.items()):
+        ui = ui_config(config)
+        city = {
+            "slug": slug,
+            "displayName": config["display_name"],
+            "shortName": config["short_name"],
+            "dataUrl": city_data_url(config),
+            "urlLabel": ui["url_label"],
+        }
+        if ui.get("emoji_burst"):
+            city["emojiBurst"] = ui["emoji_burst"]
+        cities.append(city)
+    return {"defaultSlug": "nyc", "cities": cities}
+
+
+def write_frontend_location_registry(configs: dict) -> None:
+    FRONTEND_LOCATIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    FRONTEND_LOCATIONS_PATH.write_text(
+        json.dumps(build_frontend_location_registry(configs), separators=(",", ":")),
+        encoding="utf-8",
+    )
 
 
 def round_point(point: Point) -> List[float]:
@@ -1172,6 +1200,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config = LOCATION_CONFIGS[args.city]
+    write_frontend_location_registry(LOCATION_CONFIGS)
 
     ensure_source_data(config)
 
