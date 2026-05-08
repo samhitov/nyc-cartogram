@@ -14,6 +14,11 @@ DATASETS = {
     "nyc": ROOT / "site" / "data" / "nyc" / "commute_map_data.json",
     "boston": ROOT / "site" / "data" / "boston" / "commute_map_data.json",
     "chicago": ROOT / "site" / "data" / "chicago" / "commute_map_data.json",
+    "philadelphia": ROOT / "site" / "data" / "philadelphia" / "commute_map_data.json",
+    "montreal": ROOT / "site" / "data" / "montreal" / "commute_map_data.json",
+    "toronto": ROOT / "site" / "data" / "toronto" / "commute_map_data.json",
+    "vancouver": ROOT / "site" / "data" / "vancouver" / "commute_map_data.json",
+    "dc": ROOT / "site" / "data" / "dc" / "commute_map_data.json",
 }
 BOSTON_RAPID_ROUTES = {"Red", "Orange", "Blue", "Green-B", "Green-C", "Green-D", "Green-E", "Mattapan"}
 SILVER_LINE_ROUTE_IDS = {"741", "742", "743", "746", "749", "751"}
@@ -162,8 +167,8 @@ def check_chicago(data: dict) -> None:
 
 def main() -> None:
     for city, path in DATASETS.items():
-        if city == "chicago" and not path.exists():
-            print("chicago: skipped; data not generated yet")
+        if city in {"philadelphia", "montreal", "toronto", "vancouver", "dc"} and not path.exists():
+            print(f"{city}: skipped; data not generated yet")
             continue
         data = load_dataset(city, path)
         check_common(city, data)
