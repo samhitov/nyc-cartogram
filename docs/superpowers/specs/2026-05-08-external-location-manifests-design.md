@@ -48,7 +48,7 @@ Each `locations/<slug>.json` must include:
 
 - `slug`
 - `displayName`
-- `shortName`
+- `shortName`, optional and defaults to `displayName`
 - `areaKind`
 - `outputPath`
 - `cityOutputPath`
@@ -97,7 +97,7 @@ Each `locations/<slug>.json` must include:
 - `dataCredits`
 - `downloadPrefix`
 - `urlLabel`
-- `emojiBurst`
+- `emojiBurst`, optional. If omitted, `site/app.js` uses a generic city/transit emoji fallback.
 
 ## Frontend Registry
 
@@ -121,7 +121,35 @@ Generate `site/data/locations.json` from the manifests. This file becomes the fr
 
 `site/app.js` should stop hardcoding supported city slugs and city-specific emoji sets. It should load `locations.json`, detect the requested city from query/path, validate it against the registry, then fetch that city's data URL.
 
-Generic emoji themes such as `github`, `transit`, `maps`, `parks`, and `coffee` can remain in `app.js`. City-specific emoji should come from `locations.json`.
+Generic emoji themes such as `github`, `transit`, `maps`, `parks`, and `coffee` can remain in `app.js`. City-specific emoji should come from `locations.json` only when a manifest provides `ui.emojiBurst`; otherwise `app.js` should use a generic city/transit fallback.
+
+## Location Documentation
+
+Add `locations/README.md` to document the manifest schema. It should be prescriptive enough for future agents and include:
+
+- required and optional fields;
+- the default behavior for optional `shortName`;
+- the difference between labeled `coverage.areasPath` and broader `coverage.landAreasPath`;
+- the fixed-stop urban transit policy;
+- why route allowlists must be explicit after route inspection;
+- when `transit.gtfsMember` is needed;
+- when a Python hook is acceptable;
+- source attribution expectations.
+
+Add `docs/ADDING_LOCATION.md` as the procedural guide for adding cities. It should tell agents to:
+
+1. find official/public static GTFS;
+2. add a draft manifest;
+3. build once with broad filters only when necessary;
+4. inspect route IDs;
+5. replace broad filters with explicit `includeRouteIds`;
+6. choose labeled areas separately from broader land coverage;
+7. add smoke checks for route IDs, excluded modes, central station, and unlabeled land;
+8. update Worker/Wrangler route configuration when the city should be deployable;
+9. run `npm run check`;
+10. commit one city at a time.
+
+The docs should explicitly warn: do not include commuter rail, do not include ordinary mixed-traffic buses, do not treat unlabeled municipalities as water, and stop if a GTFS source is gated behind authentication.
 
 ## Worker And Wrangler Consistency
 
@@ -143,6 +171,7 @@ Add `scripts/check_location_manifests.py` to validate:
 - `site/app.js` no longer hardcodes per-city supported slug lists;
 - `src/worker.js` prefixes match manifest slugs;
 - `wrangler.jsonc` routes include each manifest slug.
+- validation failures for non-obvious rules should point to `locations/README.md` or `docs/ADDING_LOCATION.md`.
 
 Add the manifest check to `npm run check`.
 
