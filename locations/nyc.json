@@ -1,0 +1,50 @@
+{
+  "slug": "nyc",
+  "displayName": "New York City",
+  "areaKind": "boroughs",
+  "outputPath": "site/data/commute_map_data.json",
+  "cityOutputPath": "site/data/nyc/commute_map_data.json",
+  "transit": {
+    "gtfsPath": "data/mta_gtfs_subway.zip",
+    "stationSource": "nyc_station_json",
+    "includeRouteTypes": [
+      "1"
+    ],
+    "includeRouteIds": [
+      "SI"
+    ],
+    "excludeRouteIds": []
+  },
+  "coverage": {
+    "areasPath": "data/borough_boundaries.geojson",
+    "areaNameProperty": "boroname",
+    "landAreasPath": null
+  },
+  "context": {
+    "parksPath": "data/parks_open_space.geojson",
+    "parkAreaProperty": "shape_area",
+    "parkAreaMin": 70000.0,
+    "streetsPath": "data/osm_major_streets.json",
+    "externalLand": "nyc_counties",
+    "countiesKmlPath": "data/cb_2024_us_county_500k.zip"
+  },
+  "ui": {
+    "searchQuerySuffix": "New York City",
+    "searchViewbox": "-74.30,40.95,-73.65,40.45",
+    "shareText": "Explore New York City by subway commute time with this interactive transit cartogram.",
+    "dataCredits": "MTA GTFS, NYC Open Data, OpenStreetMap",
+    "downloadPrefix": "nyc-commute-cartogram",
+    "urlLabel": "castrio.me/nyc",
+    "emojiBurst": [
+      "🗽",
+      "🌆",
+      "🏙️",
+      "🚕",
+      "🍎"
+    ]
+  },
+  "shortName": "NYC",
+  "hooks": {
+    "manualConnection": "staten_island_ferry"
+  }
+}

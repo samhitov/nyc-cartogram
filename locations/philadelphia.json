@@ -1,0 +1,67 @@
+{
+  "slug": "philadelphia",
+  "displayName": "Philadelphia",
+  "areaKind": "municipalities",
+  "outputPath": "site/data/philadelphia/commute_map_data.json",
+  "cityOutputPath": "site/data/philadelphia/commute_map_data.json",
+  "transit": {
+    "gtfsPath": "data/philadelphia/septa_gtfs.zip",
+    "gtfsUrl": "https://github.com/septadev/GTFS/releases/latest/download/gtfs_public.zip",
+    "gtfsMember": "google_bus.zip",
+    "stationSource": "gtfs_parent_stations",
+    "includeRouteTypes": [],
+    "includeRouteIds": [
+      "B1",
+      "B2",
+      "B3",
+      "D1",
+      "D2",
+      "G1",
+      "L1",
+      "M1",
+      "T1",
+      "T2",
+      "T3",
+      "T4",
+      "T5"
+    ],
+    "excludeRouteIds": [],
+    "servicePolicy": "SEPTA fixed-guideway rapid transit. Excludes ordinary buses and Regional Rail."
+  },
+  "coverage": {
+    "areasPath": "data/philadelphia/municipalities.geojson",
+    "areasUrl": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/1/query",
+    "areaNameProperty": "NAME",
+    "areaIncludeNames": [
+      "Millbourne borough",
+      "Norristown borough",
+      "Philadelphia city",
+      "Upper Darby township"
+    ],
+    "where": "STATE = '42'",
+    "landAreasPath": "data/philadelphia/land_municipalities.geojson",
+    "landAreasUrl": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/1/query",
+    "landWhere": "STATE = '42' AND COUNTY IN ('101', '045', '091', '017')"
+  },
+  "context": {
+    "parksPath": null,
+    "parkAreaMin": 70000.0,
+    "streetsPath": "data/philadelphia/osm_major_streets.json"
+  },
+  "ui": {
+    "searchQuerySuffix": "Philadelphia, Pennsylvania",
+    "searchViewbox": "-75.35,40.20,-74.95,39.80",
+    "shareText": "Explore Philadelphia by SEPTA rapid-transit commute time with this interactive transit cartogram.",
+    "dataCredits": "SEPTA GTFS, U.S. Census TIGERweb, OpenStreetMap",
+    "downloadPrefix": "philadelphia-commute-cartogram",
+    "urlLabel": "castrio.me/philadelphia",
+    "emojiBurst": [
+      "🚇",
+      "🔔",
+      "🏙️",
+      "🚉",
+      "🌳"
+    ]
+  },
+  "shortName": "Philly"
+}

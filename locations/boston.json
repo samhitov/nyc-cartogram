@@ -1,0 +1,58 @@
+{
+  "slug": "boston",
+  "displayName": "Boston",
+  "areaKind": "municipalities",
+  "outputPath": "site/data/boston/commute_map_data.json",
+  "cityOutputPath": "site/data/boston/commute_map_data.json",
+  "transit": {
+    "gtfsPath": "data/mbta_gtfs.zip",
+    "gtfsUrl": "https://cdn.mbta.com/MBTA_GTFS.zip",
+    "stationSource": "gtfs_parent_stations",
+    "includeRouteTypes": [],
+    "includeRouteIds": [
+      "Blue",
+      "Green-B",
+      "Green-C",
+      "Green-D",
+      "Green-E",
+      "Mattapan",
+      "Orange",
+      "Red"
+    ],
+    "excludeRouteIds": []
+  },
+  "coverage": {
+    "areasPath": "data/boston_municipalities.geojson",
+    "areasUrl": "https://arcgisserver.digital.mass.gov/arcgisserver/rest/services/DPH/Political_Boundaries/MapServer/1/query",
+    "areaNameProperty": "TOWNNAME",
+    "areaIncludeNames": [
+      "Boston",
+      "Braintree",
+      "Brookline",
+      "Cambridge",
+      "Malden",
+      "Medford",
+      "Milton",
+      "Newton",
+      "Quincy",
+      "Revere",
+      "Somerville"
+    ],
+    "landAreasPath": "data/boston_land_municipalities.geojson",
+    "landAreasUrl": "https://arcgisserver.digital.mass.gov/arcgisserver/rest/services/DPH/Political_Boundaries/MapServer/1/query"
+  },
+  "context": {
+    "parksPath": "data/boston_open_space.geojson",
+    "parkAreaProperty": "GIS_ACRES",
+    "parkAreaMin": 1.6,
+    "streetsPath": "data/boston_osm_major_streets.json"
+  },
+  "ui": {
+    "searchQuerySuffix": "Massachusetts",
+    "searchViewbox": "-71.30,42.45,-70.85,42.15",
+    "shareText": "Explore Boston by MBTA rapid-transit commute time with this interactive transit cartogram.",
+    "dataCredits": "MBTA/MassDOT GTFS, MassGIS, OpenStreetMap",
+    "downloadPrefix": "boston-commute-cartogram",
+    "urlLabel": "castrio.me/boston"
+  }
+}

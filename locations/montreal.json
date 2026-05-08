@@ -1,0 +1,76 @@
+{
+  "slug": "montreal",
+  "displayName": "Montreal",
+  "areaKind": "municipalities",
+  "outputPath": "site/data/montreal/commute_map_data.json",
+  "cityOutputPath": "site/data/montreal/commute_map_data.json",
+  "transit": {
+    "gtfsPath": "data/montreal/stm_gtfs.zip",
+    "gtfsUrl": "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip",
+    "stationSource": "gtfs_parent_stations",
+    "includeRouteTypes": [],
+    "includeRouteIds": [
+      "1",
+      "2",
+      "4",
+      "5"
+    ],
+    "excludeRouteIds": [],
+    "servicePolicy": "STM Metro only. Excludes STM buses and commuter rail."
+  },
+  "coverage": {
+    "areasPath": "data/montreal/municipalities.geojson",
+    "areasUrl": "https://geo.statcan.gc.ca/geo_wa/rest/services/2025/lcsd000a25s_e/MapServer/0/query",
+    "areaNameProperty": "CSDNAME",
+    "areaIncludeNames": [
+      "Laval",
+      "Longueuil",
+      "Montréal"
+    ],
+    "where": "PRUID = '24'",
+    "landAreasPath": "data/montreal/land_municipalities.geojson",
+    "landAreasUrl": "https://geo.statcan.gc.ca/geo_wa/rest/services/2025/lcsd000a25s_e/MapServer/0/query",
+    "landWhere": "PRUID = '24'",
+    "landIncludeNames": [
+      "Baie-D'Urfé",
+      "Beaconsfield",
+      "Boucherville",
+      "Brossard",
+      "Côte-Saint-Luc",
+      "Dollard-des-Ormeaux",
+      "Dorval",
+      "Hampstead",
+      "Kirkland",
+      "Laval",
+      "Longueuil",
+      "Mont-Royal",
+      "Montréal",
+      "Montréal-Ouest",
+      "Pointe-Claire",
+      "Rosemère",
+      "Saint-Lambert",
+      "Sainte-Anne-de-Bellevue",
+      "Westmount"
+    ]
+  },
+  "context": {
+    "parksPath": null,
+    "parkAreaMin": 70000.0,
+    "streetsPath": "data/montreal/osm_major_streets.json"
+  },
+  "ui": {
+    "searchQuerySuffix": "Montreal, Quebec",
+    "searchViewbox": "-73.95,45.75,-73.35,45.35",
+    "shareText": "Explore Montreal by STM Metro commute time with this interactive transit cartogram.",
+    "dataCredits": "STM GTFS, Statistics Canada, OpenStreetMap",
+    "downloadPrefix": "montreal-commute-cartogram",
+    "urlLabel": "castrio.me/montreal",
+    "emojiBurst": [
+      "🚇",
+      "🍁",
+      "🏙️",
+      "🚉",
+      "🌉"
+    ]
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "slug": "chicago",
+  "displayName": "Chicago",
+  "areaKind": "municipalities",
+  "outputPath": "site/data/chicago/commute_map_data.json",
+  "cityOutputPath": "site/data/chicago/commute_map_data.json",
+  "transit": {
+    "gtfsPath": "data/chicago/cta_gtfs.zip",
+    "gtfsUrl": "https://www.transitchicago.com/downloads/sch_data/google_transit.zip",
+    "stationSource": "gtfs_parent_stations",
+    "includeRouteTypes": [
+      "1"
+    ],
+    "includeRouteIds": [],
+    "excludeRouteIds": [],
+    "servicePolicy": "CTA L only. Excludes CTA buses and Metra."
+  },
+  "coverage": {
+    "areasPath": "data/chicago/municipalities.geojson",
+    "areasUrl": "https://services.arcgis.com/F7DSX1DSNSiWmOqh/arcgis/rest/services/Cook_County_Municipalities/FeatureServer/0/query",
+    "areaNameProperty": "NAME",
+    "areaIncludeNames": [
+      "Chicago",
+      "Cicero",
+      "Evanston",
+      "Forest Park",
+      "Oak Park",
+      "Rosemont",
+      "Skokie",
+      "Wilmette"
+    ],
+    "landAreasPath": "data/chicago/land_municipalities.geojson",
+    "landAreasUrl": "https://services.arcgis.com/F7DSX1DSNSiWmOqh/arcgis/rest/services/Cook_County_Municipalities/FeatureServer/0/query"
+  },
+  "context": {
+    "parksPath": null,
+    "parkAreaMin": 70000.0,
+    "streetsPath": "data/chicago/osm_major_streets.json"
+  },
+  "ui": {
+    "searchQuerySuffix": "Chicago, Illinois",
+    "searchViewbox": "-87.95,42.10,-87.45,41.55",
+    "shareText": "Explore Chicago by CTA L commute time with this interactive transit cartogram.",
+    "dataCredits": "CTA GTFS, Cook County open data, OpenStreetMap",
+    "downloadPrefix": "chicago-commute-cartogram",
+    "urlLabel": "castrio.me/chicago",
+    "emojiBurst": [
+      "🚇",
+      "🏙️",
+      "🌊",
+      "⭐",
+      "🚉"
+    ]
+  }
+}
