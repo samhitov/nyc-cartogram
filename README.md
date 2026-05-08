@@ -1,8 +1,8 @@
-# NYC Cartogram
+# Commute-Time Cartograms
 
-This project generates two related artifacts for New York City:
+This project generates commute-time cartograms for New York City and other major metro areas with rapid transit:
 
-- a static SVG cartogram that expands places with stronger subway access and compresses places with weaker access
+- a static SVG cartogram for New York City that expands places with stronger subway access and compresses places with weaker access
 - an interactive commute-time web app that lets you pin an origin, inspect travel times, toggle the warp and heatmap layers, and share deep links to a view
 
 Live site: [castrio.me/nyc](https://castrio.me/nyc/)
@@ -11,13 +11,13 @@ Live site: [castrio.me/nyc](https://castrio.me/nyc/)
 
 ## What The Project Uses
 
-- NYC borough boundaries
-- MTA GTFS subway data for stations, routes, and travel times
+- boundary and land-mask data for each supported metro area
+- static GTFS data for rapid-transit stations, routes, and travel times
 - major streets and park/open-space overlays for the basemap
 - a distance-based warp for the static SVG
 - a station-to-station network plus walking access model for the interactive commute map
 
-The interactive app includes the Staten Island Ferry connection, but it does not model buses, regional rail, or real-time schedules.
+The interactive app models fixed-stop urban rapid transit. It does not model ordinary buses, commuter/regional rail, or real-time schedules. For NYC, it also includes the Staten Island Ferry connection.
 
 ## Requirements
 
@@ -63,7 +63,14 @@ Output:
 site/data/commute_map_data.json
 ```
 
-This produces the compact data bundle consumed by the front-end app in `site/`.
+This produces the default NYC data bundle consumed by the front-end app in `site/`. To build a specific supported location:
+
+```bash
+python3 build_commute_site_data.py --city boston
+python3 build_commute_site_data.py --city chicago
+python3 build_commute_site_data.py --city philadelphia
+python3 build_commute_site_data.py --city montreal
+```
 
 ## Local Preview
 
@@ -82,6 +89,7 @@ http://localhost:8000/site/
 Useful local-preview notes:
 
 - The site loads its data from `site/data/commute_map_data.json`.
+- City-specific data lives under `site/data/<city>/commute_map_data.json`.
 - Address search uses OpenStreetMap Nominatim at runtime, so that feature needs internet access.
 - On plain static localhost, production-style URLs like `/nyc/@40.71267,-73.92366` are not available. Use query-string sharing there instead.
 
@@ -108,13 +116,13 @@ pnpm run deploy
 This repo includes:
 
 - [wrangler.jsonc](/Users/primaryuser/Desktop/nyc-projection/wrangler.jsonc) to bundle the `site/` directory as Worker assets
-- [src/worker.js](/Users/primaryuser/Desktop/nyc-projection/src/worker.js) to serve the app from the `/nyc` path prefix on `castrio.me`
+- [src/worker.js](/Users/primaryuser/Desktop/nyc-projection/src/worker.js) to serve the app from city path prefixes on `castrio.me`
 
 Deployment behavior:
 
-- The Worker serves the app at `https://castrio.me/nyc/`.
-- Requests to `/nyc` are normalized to `/nyc/`.
-- Asset requests under `/nyc/...` are rewritten to bundled assets from `site/`.
+- The Worker serves the app at city paths such as `https://castrio.me/nyc/`, `https://castrio.me/boston/`, and `https://castrio.me/chicago/`.
+- Requests to a city root are normalized to a trailing slash.
+- Asset requests under city paths are rewritten to bundled assets from `site/`.
 - Pretty origin routes like `https://castrio.me/nyc/@40.71267,-73.92366` are handled by the Worker because route-like paths fall back to `site/index.html`.
 
 If this is your first local `pnpm` install and Wrangler postinstall steps were blocked, run `pnpm approve-builds` and approve the relevant packages before deploying again.
@@ -127,6 +135,7 @@ If this is your first local `pnpm` install and Wrangler postinstall steps were b
 - [site/app.js](/Users/primaryuser/Desktop/nyc-projection/site/app.js): interactive map, search, sharing, and rendering logic
 - [site/styles.css](/Users/primaryuser/Desktop/nyc-projection/site/styles.css): site styles
 - [site/data/commute_map_data.json](/Users/primaryuser/Desktop/nyc-projection/site/data/commute_map_data.json): generated site dataset
+- [site/data/<city>/commute_map_data.json](/Users/primaryuser/Desktop/nyc-projection/site/data): generated city-specific datasets
 - [src/worker.js](/Users/primaryuser/Desktop/nyc-projection/src/worker.js): Cloudflare Worker entrypoint
 
 ## Current App Behavior
@@ -135,7 +144,7 @@ If this is your first local `pnpm` install and Wrangler postinstall steps were b
 - pin an origin and inspect commute times back to that point
 - toggle warp and heatmap layers
 - zoom and full-screen the map
-- search for NYC addresses
+- search for addresses in the selected metro area
 - use browser geolocation when available
 - export and share views, including deep links
 - display a 60-minute reachability score
@@ -143,6 +152,6 @@ If this is your first local `pnpm` install and Wrangler postinstall steps were b
 ## Notes
 
 - The map uses a shared geographic projection across boroughs, stations, route shapes, parks, and streets so layers stay aligned.
-- For the interactive app, travel times are based on subway travel plus walking access to and from stations.
-- Borough labels are placed from each borough's largest polygon to keep labels stable for fragmented geometries.
+- For the interactive app, travel times are based on rapid-transit travel plus walking access to and from stations.
+- Area labels are placed from each area's largest polygon to keep labels stable for fragmented geometries.
 - Some UI/share icons are from [Iconmonstr](https://iconmonstr.com/).
