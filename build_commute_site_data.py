@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import math
 import argparse
@@ -74,6 +75,16 @@ CHICAGO_MUNICIPALITIES_URL = (
     "https://services.arcgis.com/F7DSX1DSNSiWmOqh/arcgis/rest/services/"
     "Cook_County_Municipalities/FeatureServer/0/query"
 )
+PHILADELPHIA_DATA_DIR = DATA_DIR / "philadelphia"
+PHILADELPHIA_AREAS_PATH = PHILADELPHIA_DATA_DIR / "municipalities.geojson"
+PHILADELPHIA_LAND_AREAS_PATH = PHILADELPHIA_DATA_DIR / "land_municipalities.geojson"
+PHILADELPHIA_STREETS_PATH = PHILADELPHIA_DATA_DIR / "osm_major_streets.json"
+PHILADELPHIA_GTFS_PATH = PHILADELPHIA_DATA_DIR / "septa_gtfs.zip"
+PHILADELPHIA_SEPTA_GTFS_URL = "https://github.com/septadev/GTFS/releases/latest/download/gtfs_public.zip"
+US_CENSUS_COUNTY_SUBDIVISIONS_URL = (
+    "https://tigerweb.geo.census.gov/arcgis/rest/services/"
+    "TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/1/query"
+)
 CHICAGO_MUNICIPALITIES = (
     "Chicago",
     "Cicero",
@@ -84,6 +95,27 @@ CHICAGO_MUNICIPALITIES = (
     "Skokie",
     "Wilmette",
 )
+PHILADELPHIA_MUNICIPALITIES = (
+    "Philadelphia city",
+    "Upper Darby township",
+    "Millbourne borough",
+    "Norristown borough",
+)
+PHILADELPHIA_RAPID_TRANSIT_ROUTES = {
+    "B1",
+    "B2",
+    "B3",
+    "D1",
+    "D2",
+    "G1",
+    "L1",
+    "M1",
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+    "T5",
+}
 
 GRID_COLS = 160
 GRID_ROWS = 160
@@ -236,6 +268,51 @@ LOCATION_CONFIGS = {
             "url_label": "castrio.me/chicago",
         },
     },
+    "philadelphia": {
+        "slug": "philadelphia",
+        "display_name": "Philadelphia",
+        "short_name": "Philly",
+        "area_kind": "municipalities",
+        "output_path": ROOT / "site" / "data" / "philadelphia" / "commute_map_data.json",
+        "city_output_path": ROOT / "site" / "data" / "philadelphia" / "commute_map_data.json",
+        "transit": {
+            "gtfs_path": PHILADELPHIA_GTFS_PATH,
+            "gtfs_url": PHILADELPHIA_SEPTA_GTFS_URL,
+            "gtfs_member": "google_bus.zip",
+            "station_source": "gtfs_parent_stations",
+            "include_route_types": set(),
+            "include_route_ids": PHILADELPHIA_RAPID_TRANSIT_ROUTES,
+            "exclude_route_ids": set(),
+            "service_policy": "SEPTA fixed-guideway rapid transit. Excludes ordinary buses and Regional Rail.",
+        },
+        "coverage": {
+            "areas_path": PHILADELPHIA_AREAS_PATH,
+            "areas_url": US_CENSUS_COUNTY_SUBDIVISIONS_URL,
+            "area_name_property": "NAME",
+            "area_include_names": set(PHILADELPHIA_MUNICIPALITIES),
+            "where": "STATE = '42'",
+            "land_areas_path": PHILADELPHIA_LAND_AREAS_PATH,
+            "land_areas_url": US_CENSUS_COUNTY_SUBDIVISIONS_URL,
+            "land_where": "STATE = '42' AND COUNTY IN ('101', '045', '091', '017')",
+        },
+        "context": {
+            "parks_path": None,
+            "park_area_property": None,
+            "park_area_min": 70000.0,
+            "streets_path": PHILADELPHIA_STREETS_PATH,
+        },
+        "hooks": {
+            "manual_connection": None,
+        },
+        "ui": {
+            "search_query_suffix": "Philadelphia, Pennsylvania",
+            "search_viewbox": "-75.35,40.20,-74.95,39.80",
+            "share_text": "Explore Philadelphia by SEPTA rapid-transit commute time with this interactive transit cartogram.",
+            "data_credits": "SEPTA GTFS, U.S. Census TIGERweb, OpenStreetMap",
+            "download_prefix": "philadelphia-commute-cartogram",
+            "url_label": "castrio.me/philadelphia",
+        },
+    },
 }
 
 
@@ -342,10 +419,10 @@ def ensure_arcgis_coverage(config: dict) -> None:
 
     include_names = coverage.get("area_include_names")
     name_property = coverage["area_name_property"]
-    where = "1=1"
+    where = coverage.get("where", "1=1")
     if include_names:
         quoted = "', '".join(sorted(include_names))
-        where = f"{name_property} IN ('{quoted}')"
+        where = f"({where}) AND {name_property} IN ('{quoted}')"
 
     payload = query_arcgis_geojson(
         areas_url,
@@ -373,7 +450,7 @@ def ensure_arcgis_land_coverage(config: dict) -> None:
     payload = query_arcgis_geojson(
         land_areas_url,
         {
-            "where": "1=1",
+            "where": coverage.get("land_where", "1=1"),
             "outFields": "*",
             "outSR": 4326,
             "returnGeometry": "true",
@@ -762,11 +839,24 @@ def build_external_land_polygons(
     return polygons
 
 
-def read_csv_from_zip(gtfs_path: Path, member: str) -> Iterable[dict]:
+def read_csv_from_zip(gtfs_path: Path, member: str, gtfs_member: str | None = None) -> Iterable[dict]:
     with zipfile.ZipFile(gtfs_path) as archive:
+        if gtfs_member:
+            with archive.open(gtfs_member) as nested_handle:
+                nested_bytes = nested_handle.read()
+            with zipfile.ZipFile(io.BytesIO(nested_bytes)) as nested_archive:
+                with nested_archive.open(member) as handle:
+                    reader = csv.DictReader(line.decode("utf-8-sig") for line in handle)
+                    yield from reader
+            return
         with archive.open(member) as handle:
             reader = csv.DictReader(line.decode("utf-8-sig") for line in handle)
             yield from reader
+
+
+def read_csv_from_gtfs(config: dict, member: str) -> Iterable[dict]:
+    transit = transit_config(config)
+    yield from read_csv_from_zip(transit["gtfs_path"], member, transit.get("gtfs_member"))
 
 
 def parse_gtfs_time(value: str) -> int:
@@ -818,7 +908,7 @@ def build_nyc_station_data(lat0: float, config: dict) -> Tuple[list, Dict[str, i
         station_index_by_id[complex_id] = len(stations)
         stations.append(info)
 
-    for row in read_csv_from_zip(transit_config(config)["gtfs_path"], "stops.txt"):
+    for row in read_csv_from_gtfs(config, "stops.txt"):
         stop_id = row["stop_id"]
         parent_station = row.get("parent_station") or ""
         if stop_id not in stop_to_complex and parent_station and parent_station in stop_to_complex:
@@ -829,11 +919,11 @@ def build_nyc_station_data(lat0: float, config: dict) -> Tuple[list, Dict[str, i
 
 def build_gtfs_parent_station_data(config: dict, trips_by_id: dict, lat0: float) -> Tuple[list, Dict[str, int], Dict[str, str]]:
     gtfs_path = transit_config(config)["gtfs_path"]
-    stops_by_id = {row["stop_id"]: row for row in read_csv_from_zip(gtfs_path, "stops.txt")}
+    stops_by_id = {row["stop_id"]: row for row in read_csv_from_gtfs(config, "stops.txt")}
     used_stop_ids = set()
     route_ids_by_parent: Dict[str, set] = defaultdict(set)
 
-    for row in read_csv_from_zip(gtfs_path, "stop_times.txt"):
+    for row in read_csv_from_gtfs(config, "stop_times.txt"):
         trip = trips_by_id.get(row["trip_id"])
         if not trip:
             continue
@@ -876,7 +966,7 @@ def build_gtfs_parent_station_data(config: dict, trips_by_id: dict, lat0: float)
 def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float], config: dict) -> Tuple[dict, list, dict]:
     route_styles = {}
     gtfs_path = transit_config(config)["gtfs_path"]
-    for row in read_csv_from_zip(gtfs_path, "routes.txt"):
+    for row in read_csv_from_gtfs(config, "routes.txt"):
         if not route_is_included(row, config):
             continue
         route_styles[row["route_id"]] = {
@@ -887,7 +977,7 @@ def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float]
 
     trips_by_id = {}
     shape_counts: Dict[Tuple[str, str], Counter[str]] = {}
-    for row in read_csv_from_zip(gtfs_path, "trips.txt"):
+    for row in read_csv_from_gtfs(config, "trips.txt"):
         route_id = row["route_id"]
         if route_id not in route_styles:
             continue
@@ -904,7 +994,7 @@ def build_routes_and_shapes(lat0: float, bbox: Tuple[float, float, float, float]
             selected_shape_ids[shape_id] = route_id
 
     points_by_shape = defaultdict(list)
-    for row in read_csv_from_zip(gtfs_path, "shapes.txt"):
+    for row in read_csv_from_gtfs(config, "shapes.txt"):
         shape_id = row["shape_id"]
         if shape_id not in selected_shape_ids:
             continue
@@ -934,7 +1024,7 @@ def build_route_waits(trips_by_id: dict, config: dict) -> Dict[str, float]:
     current_trip_id = None
     first_departure = None
 
-    for row in read_csv_from_zip(transit_config(config)["gtfs_path"], "stop_times.txt"):
+    for row in read_csv_from_gtfs(config, "stop_times.txt"):
         trip_id = row["trip_id"]
         stop_sequence = int(row["stop_sequence"])
         if trip_id != current_trip_id:
@@ -1007,7 +1097,7 @@ def build_graph(
                 to_index = station_index_by_id[to_complex]
                 durations_by_edge[(from_index, to_index, route_id)].append(duration_seconds / 60.0)
 
-    for row in read_csv_from_zip(transit_config(config)["gtfs_path"], "stop_times.txt"):
+    for row in read_csv_from_gtfs(config, "stop_times.txt"):
         trip_id = row["trip_id"]
         if current_trip_id is None:
             current_trip_id = trip_id

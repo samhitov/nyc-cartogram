@@ -1,4 +1,4 @@
-const PATH_PREFIXES = ["/nyc", "/boston", "/chicago"];
+const PATH_PREFIXES = ["/nyc", "/boston", "/chicago", "/philadelphia"];
 const DIAGNOSTIC_HEADER = "x-nyc-cartogram-worker";
 
 function withoutPrefix(pathname) {

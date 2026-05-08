@@ -1,4 +1,4 @@
-const SUPPORTED_CITY_SLUGS = new Set(["nyc", "boston", "chicago"]);
+const SUPPORTED_CITY_SLUGS = new Set(["nyc", "boston", "chicago", "philadelphia"]);
 
 function detectCitySlug() {
   const params = new URLSearchParams(window.location.search);
@@ -54,6 +54,7 @@ const EMOJI_BURST_SETS = {
   github: ["💻", "🖥️", "⌨️", "⚙️", "🧑‍💻"],
   nyc: ["🗽", "🌆", "🏙️", "🚕", "🍎"],
   chicago: ["🚇", "🏙️", "🌊", "⭐", "🚉"],
+  philadelphia: ["🚇", "🔔", "🏙️", "🚉", "🌳"],
   transit: ["🚇", "🚉", "🚊", "🚦", "🛤️"],
   maps: ["🗺️", "📍", "🧭", "➡️", "📌"],
   parks: ["🌳", "🌲", "🌿", "🍃", "🌱"],

@@ -23,6 +23,21 @@ DATASETS = {
 BOSTON_RAPID_ROUTES = {"Red", "Orange", "Blue", "Green-B", "Green-C", "Green-D", "Green-E", "Mattapan"}
 SILVER_LINE_ROUTE_IDS = {"741", "742", "743", "746", "749", "751"}
 CHICAGO_L_ROUTES = {"Red", "Blue", "Brn", "G", "Org", "Pink", "P", "Y"}
+PHILADELPHIA_RAPID_TRANSIT_ROUTES = {
+    "B1",
+    "B2",
+    "B3",
+    "D1",
+    "D2",
+    "G1",
+    "L1",
+    "M1",
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+    "T5",
+}
 
 
 def fail(message: str) -> None:
@@ -165,6 +180,22 @@ def check_chicago(data: dict) -> None:
     require_land_mask_contains(data, -87.7937, 41.8506, "chicago land mask missing Berwyn")
 
 
+def check_philadelphia(data: dict) -> None:
+    route_ids = set(data["routeStyles"])
+    require(
+        PHILADELPHIA_RAPID_TRANSIT_ROUTES.issubset(route_ids),
+        "philadelphia missing one or more rapid-transit routes",
+    )
+    require(route_ids.issubset(PHILADELPHIA_RAPID_TRANSIT_ROUTES), "philadelphia includes non-rapid-transit route ids")
+    require(any(area.get("name") == "Philadelphia city" for area in data["areas"]), "philadelphia missing Philadelphia area")
+    station_names = {station.get("name") for station in data["stations"]}
+    require(
+        "15th St/City Hall Station" in station_names or "15th St/City Hall" in station_names,
+        "philadelphia missing expected Center City station",
+    )
+    require_land_mask_contains(data, -75.2750, 39.9800, "philadelphia land mask missing Lower Merion")
+
+
 def main() -> None:
     for city, path in DATASETS.items():
         if city in {"philadelphia", "montreal", "toronto", "vancouver", "dc"} and not path.exists():
@@ -178,6 +209,8 @@ def main() -> None:
             check_boston(data)
         elif city == "chicago":
             check_chicago(data)
+        elif city == "philadelphia":
+            check_philadelphia(data)
         print(f"{city}: ok")
 
 

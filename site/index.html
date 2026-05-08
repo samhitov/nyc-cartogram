@@ -116,7 +116,7 @@
     <script>
       (function () {
         const path = window.location.pathname;
-        const supportedSlugs = new Set(["nyc", "boston", "chicago"]);
+        const supportedSlugs = new Set(["nyc", "boston", "chicago", "philadelphia"]);
         const firstSegment = path.split("/").filter(Boolean)[0];
         const deploySlug = supportedSlugs.has(firstSegment) ? firstSegment : "nyc";
         const isSubpathDeploy = supportedSlugs.has(firstSegment);
