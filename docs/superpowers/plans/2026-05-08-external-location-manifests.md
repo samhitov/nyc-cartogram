@@ -20,6 +20,7 @@
 - Modify `site/app.js` to load the registry instead of hardcoding city slugs and city emoji sets.
 - Modify `package.json` to run the manifest check.
 - Modify `scripts/check_commute_data.py` only if generated registry validation needs to be included in data checks.
+- Modify `README.md` after the manifest migration to broaden the project framing beyond NYC while preserving the original author's style.
 - Generated and committed: `site/data/locations.json`.
 
 ## Task 1: Document Location Manifests And Add-Location Workflow
@@ -610,7 +611,42 @@ git add scripts/check_location_manifests.py package.json
 git commit -m "test: validate location manifest consistency"
 ```
 
-## Task 7: Final Rebuild And Verification
+## Task 7: Update README For Multi-Metro Framing
+
+**Files:**
+- Modify: `README.md`
+
+- [ ] **Step 1: Broaden the README without rewriting it**
+
+Edit `README.md` after the manifest migration is complete. Keep the existing structure, image, and original author's tone. Make only targeted updates:
+
+- change the title or opening paragraph from NYC-only framing to commute-time cartograms for NYC and other rapid-transit metro areas;
+- keep the NYC image;
+- describe supported city data builds with `--city <slug>`;
+- update Worker/deployment wording from only `/nyc` to city path prefixes;
+- update current app behavior from "search for NYC addresses" to selected metro-area addresses;
+- keep NYC-specific static SVG notes intact.
+
+- [ ] **Step 2: Review the README diff**
+
+Run:
+
+```bash
+git diff -- README.md
+```
+
+Expected: small documentation-only diff that broadens scope without changing project voice.
+
+- [ ] **Step 3: Commit README update**
+
+Run:
+
+```bash
+git add README.md
+git commit -m "docs: broaden README for multiple metros"
+```
+
+## Task 8: Final Rebuild And Verification
 
 **Files:**
 - Generated: `site/data/locations.json`
